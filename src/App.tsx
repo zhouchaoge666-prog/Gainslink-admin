@@ -2,9 +2,6 @@ import { useState } from 'react';
 import { Bell, CalendarDays } from 'lucide-react';
 import Sidebar, { type MenuKey } from './components/Sidebar';
 import PlatformOverview from './components/PlatformOverview';
-import KpiCards from './components/KpiCards';
-import TrendChart from './components/TrendChart';
-import CoreDashboard from './components/CoreDashboard';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -18,20 +15,8 @@ function PlaceholderPage({ title }: { title: string }) {
   );
 }
 
-function MatchBetPage() {
-  return (
-    <div className="flex-1 overflow-y-auto p-5 space-y-4">
-      <KpiCards />
-      <TrendChart />
-      <CoreDashboard />
-      <div className="h-4"></div>
-    </div>
-  );
-}
-
 const pageTitles: Record<MenuKey, string> = {
   'overview': '平台总览',
-  'match-bet': '赛事竞猜',
   'match-mgmt': '赛事管理',
   'user-mgmt': '用户管理',
 };
@@ -72,7 +57,6 @@ function App() {
 
         {/* 内容区 */}
         {activeMenu === 'overview' && <PlatformOverview />}
-        {activeMenu === 'match-bet' && <MatchBetPage />}
         {activeMenu === 'match-mgmt' && <PlaceholderPage title="赛事管理" />}
         {activeMenu === 'user-mgmt' && <PlaceholderPage title="用户管理" />}
       </main>

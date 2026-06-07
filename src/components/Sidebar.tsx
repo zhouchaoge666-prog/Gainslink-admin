@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { LayoutDashboard, Trophy, Users, LogOut, HelpCircle, ChevronDown } from 'lucide-react';
 
-export type MenuKey = 'overview' | 'match-bet' | 'match-mgmt' | 'user-mgmt';
+export type MenuKey = 'overview' | 'match-mgmt' | 'user-mgmt';
 
 interface SidebarProps {
   active: MenuKey;
@@ -23,7 +23,7 @@ export default function Sidebar({ active, onChange }: SidebarProps) {
           <button
             onClick={() => setDashboardOpen(!dashboardOpen)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
-              active === 'overview' || active === 'match-bet'
+              active === 'overview'
                 ? 'bg-primary text-white'
                 : 'text-slate-400 hover:bg-sidebar-hover hover:text-slate-200'
             }`}
@@ -46,16 +46,6 @@ export default function Sidebar({ active, onChange }: SidebarProps) {
                 }`}
               >
                 平台总览
-              </button>
-              <button
-                onClick={() => onChange('match-bet')}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                  active === 'match-bet'
-                    ? 'bg-primary/20 text-white'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-sidebar-hover'
-                }`}
-              >
-                赛事竞猜
               </button>
             </div>
           )}
