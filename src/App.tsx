@@ -2,22 +2,15 @@ import { useState } from 'react';
 import { Bell, CalendarDays } from 'lucide-react';
 import Sidebar, { type MenuKey } from './components/Sidebar';
 import PlatformOverview from './components/PlatformOverview';
+import MatchManagement from './components/MatchManagement';
+import UserManagement from './components/UserManagement';
 
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center">
-        <div className="text-4xl mb-4">🚧</div>
-        <div className="text-lg font-medium text-slate-700">{title}</div>
-        <div className="text-sm text-slate-400 mt-1">功能开发中，敬请期待</div>
-      </div>
-    </div>
-  );
-}
 
 const pageTitles: Record<MenuKey, string> = {
   'overview': '平台总览',
-  'match-mgmt': '赛事管理',
+  'match-dashboard': '赛事运营看板',
+  'match-list': '赛事管理',
+  'match-organizer': '机构授权',
   'user-mgmt': '用户管理',
 };
 
@@ -57,8 +50,18 @@ function App() {
 
         {/* 内容区 */}
         {activeMenu === 'overview' && <PlatformOverview />}
-        {activeMenu === 'match-mgmt' && <PlaceholderPage title="赛事管理" />}
-        {activeMenu === 'user-mgmt' && <PlaceholderPage title="用户管理" />}
+        {(activeMenu === 'match-dashboard' || activeMenu === 'match-list' || activeMenu === 'match-organizer') && (
+          <MatchManagement
+            activeSubTab={
+              activeMenu === 'match-dashboard'
+                ? 'dashboard'
+                : activeMenu === 'match-list'
+                ? 'matches'
+                : 'organizers'
+            }
+          />
+        )}
+        {activeMenu === 'user-mgmt' && <UserManagement />}
       </main>
     </div>
   );

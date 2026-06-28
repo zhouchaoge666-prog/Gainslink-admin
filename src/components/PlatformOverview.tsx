@@ -14,6 +14,26 @@ import {
   userPointDistribution, matchUserDistribution, userCountryDistribution,
 } from '../data/mockData';
 
+import type { Formatter, ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
+
+const formatPercent: Formatter<ValueType, NameType> = (v) => [`${v ?? 0}%`, ''];
+const formatCount: Formatter<ValueType, NameType> = (v, _name, item) => {
+  const payload = item?.payload as { pct?: number } | undefined;
+  const safeV = v ?? 0;
+  const num = Array.isArray(safeV) ? Number(safeV[0]) : Number(safeV);
+  return [`${num.toLocaleString()}人 (${payload?.pct ?? 0}%)`, '用户数'];
+};
+const formatGame: Formatter<ValueType, NameType> = (v, _name, item) => {
+  const payload = item?.payload as { pct?: number; game?: string } | undefined;
+  const safeV = v ?? 0;
+  const num = Array.isArray(safeV) ? Number(safeV[0]) : Number(safeV);
+  return [`${num.toLocaleString()}人 (${payload?.pct ?? 0}%)`, payload?.game ?? ''];
+};
+const formatSource: Formatter<ValueType, NameType> = (v, _name, item) => {
+  const payload = item?.payload as { name?: string } | undefined;
+  return [`${v ?? 0}%`, payload?.name ?? ''];
+};
+
 const iconMap: Record<string, React.ElementType> = {
   '今日活跃用户': Activity,
   '总注册用户': Users,
@@ -220,7 +240,7 @@ function RetentionChart() {
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
           <XAxis dataKey="week" tick={{ fontSize: 11 }} stroke="#94a3b8" />
           <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" unit="%" />
-          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }} formatter={(v: any) => [`${v}%`, '']} />
+          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }} formatter={formatPercent} />
           <Line type="monotone" dataKey="d1" name="D1留存" stroke="#3b82f6" strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="d3" name="D3留存" stroke="#8b5cf6" strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="d7" name="D7留存" stroke="#10b981" strokeWidth={2} dot={false} />
@@ -253,7 +273,7 @@ function UserDistribution() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 11 }} stroke="#94a3b8" />
               <YAxis dataKey="range" type="category" tick={{ fontSize: 12 }} stroke="#64748b" width={70} />
-              <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v: any, _n: any, p: any) => [`${Number(v).toLocaleString()}人 (${p.payload.pct}%)`, '用户数']} />
+              <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={formatCount} />
               <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
             </BarChart>
           </ResponsiveContainer>
@@ -270,7 +290,7 @@ function UserDistribution() {
                     <Cell key={index} fill={['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#64748b'][index]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v: any, _n: any, p: any) => [`${Number(v).toLocaleString()}人 (${p.payload.pct}%)`, p.payload.game]} />
+                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={formatGame} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-col gap-2 min-w-[100px]">
@@ -296,7 +316,7 @@ function UserDistribution() {
                     <Cell key={index} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v: any, _n: any, p: any) => [`${v}%`, p.payload.name]} />
+                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={formatSource} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-col gap-2 min-w-[100px]">
@@ -319,7 +339,7 @@ function UserDistribution() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 11 }} stroke="#94a3b8" />
               <YAxis dataKey="country" type="category" tick={{ fontSize: 12 }} stroke="#64748b" width={70} />
-              <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v: any, _n: any, p: any) => [`${Number(v).toLocaleString()}人 (${p.payload.pct}%)`, '用户数']} />
+              <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={formatCount} />
               <Bar dataKey="users" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
             </BarChart>
           </ResponsiveContainer>

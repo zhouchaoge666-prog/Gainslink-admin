@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { LayoutDashboard, Trophy, Users, LogOut, HelpCircle, ChevronDown } from 'lucide-react';
 
-export type MenuKey = 'overview' | 'match-mgmt' | 'user-mgmt';
+export type MenuKey = 'overview' | 'match-dashboard' | 'match-list' | 'match-organizer' | 'user-mgmt';
+
+const matchMgmtKeys: MenuKey[] = ['match-dashboard', 'match-list', 'match-organizer'];
 
 interface SidebarProps {
   active: MenuKey;
@@ -10,6 +12,9 @@ interface SidebarProps {
 
 export default function Sidebar({ active, onChange }: SidebarProps) {
   const [dashboardOpen, setDashboardOpen] = useState(true);
+  const [matchMgmtOpen, setMatchMgmtOpen] = useState(true);
+
+  const isMatchMgmtActive = matchMgmtKeys.includes(active);
 
   return (
     <aside className="w-52 bg-sidebar text-white flex flex-col flex-shrink-0">
@@ -51,18 +56,58 @@ export default function Sidebar({ active, onChange }: SidebarProps) {
           )}
         </div>
 
-        {/* 赛事管理 */}
-        <button
-          onClick={() => onChange('match-mgmt')}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
-            active === 'match-mgmt'
-              ? 'bg-primary text-white'
-              : 'text-slate-400 hover:bg-sidebar-hover hover:text-slate-200'
-          }`}
-        >
-          <Trophy size={18} />
-          <span className="flex-1">赛事管理</span>
-        </button>
+        {/* 赛事管理 - 可展开 */}
+        <div>
+          <button
+            onClick={() => setMatchMgmtOpen(!matchMgmtOpen)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+              isMatchMgmtActive
+                ? 'bg-primary text-white'
+                : 'text-slate-400 hover:bg-sidebar-hover hover:text-slate-200'
+            }`}
+          >
+            <Trophy size={18} />
+            <span className="flex-1">赛事管理</span>
+            <ChevronDown
+              size={14}
+              className={`transition-transform ${matchMgmtOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {matchMgmtOpen && (
+            <div className="mt-1 ml-6 space-y-0.5">
+              <button
+                onClick={() => onChange('match-dashboard')}
+                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                  active === 'match-dashboard'
+                    ? 'bg-primary/20 text-white'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-sidebar-hover'
+                }`}
+              >
+                赛事运营看板
+              </button>
+              <button
+                onClick={() => onChange('match-list')}
+                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                  active === 'match-list'
+                    ? 'bg-primary/20 text-white'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-sidebar-hover'
+                }`}
+              >
+                赛事管理
+              </button>
+              <button
+                onClick={() => onChange('match-organizer')}
+                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                  active === 'match-organizer'
+                    ? 'bg-primary/20 text-white'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-sidebar-hover'
+                }`}
+              >
+                机构授权
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* 用户管理 */}
         <button
