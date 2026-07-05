@@ -1,26 +1,22 @@
-import { useState, useMemo } from 'react';
-import { Swords, Award, Wand2, ChevronDown, ChevronUp, Trophy, Users, GripVertical, Trash2, CalendarClock, X } from 'lucide-react';
-import type { MatchRound, MatchGame, TournamentStage, GroupStanding } from '../../data/mockData';
+import { useState, useMemo, useEffect } from 'react';
+import { Wand2, ChevronDown, ChevronUp, Users, GripVertical, Trash2, CalendarClock, X, Plus, Pencil, Check, Trophy, SlidersHorizontal } from 'lucide-react';
+import type { MatchRound, MatchGame, TournamentStage, GroupStanding, AdvancementConfig } from '../../data/mockData';
 import { useMatch, useMatchActions } from '../../context/matchHooks';
 import type { TeamPoolItem } from './TeamPool';
-import MatchResultInput from './MatchResultInput';
 import RoundRobinBracket from './bracket/RoundRobinBracket';
 import EliminationBracket from './bracket/EliminationBracket';
 import SwissBracket from './bracket/SwissBracket';
+import FreeBracket from './bracket/FreeBracket';
 import { computeGroupStandings, computeSwissStandings } from '../../data/mockData';
-
-const subTabs = [
-  { key: 'bracket', label: '对阵图', icon: Swords },
-  { key: 'results', label: '成绩录入', icon: Award },
-];
 
 export default function MatchCompetitionMgmt({ onTeamClick }: { onTeamClick?: (teamName: string) => void }) {
   const { match, rounds, approvedTeams, advancedTeams } = useMatch();
-  const { assignTeam, clearSlot, updateGame, autoAssignStage, clearStage, showToast, pairSwissRound, assignGroupSlot, clearGroupSlot, advanceTeams, addExtraRound } = useMatchActions();
+  const { assignTeam, clearSlot, updateGame, autoAssignStage, clearStage, showToast, pairSwissRound, assignGroupSlot, clearGroupSlot, advanceTeams, addExtraRound, addFreeGame, deleteFreeRound, updateStageMeta } = useMatchActions();
 
-  const [subTab, setSubTab] = useState('bracket');
   const stages = match?.stages || [];
   const [activeStageId, setActiveStageId] = useState<string | null>(stages[0]?.stageId || null);
+  // 每个阶段手动添加的自定义队伍
+  const [extraTeams, setExtraTeams] = useState<Record<string, TeamPoolItem[]>>({});
 
   // 当前阶段已分配的队伍名
   const activeStageAssignedNames = useMemo(() => {
@@ -39,21 +35,41 @@ export default function MatchCompetitionMgmt({ onTeamClick }: { onTeamClick?: (t
   // 本阶段全量队伍（含已排入对阵图的）：有晋级记录用晋级列表，否则用报名队伍
   const allStageTeams = useMemo((): TeamPoolItem[] => {
     const advTeams = activeStageId ? (advancedTeams[activeStageId] ?? []) : [];
+    const extra = extraTeams[activeStageId || ''] || [];
     if (advTeams.length > 0) {
-      return advTeams.map((name, i) => ({ userId: `adv-${i}-${name}`, userNickname: name, teamName: name }));
+      const base = advTeams.map((name, i) => ({ userId: `adv-${i}-${name}`, userNickname: name, teamName: name }));
+      return [...base, ...extra];
     }
-    // 来源为"上一阶段晋级"的阶段，未晋级前不展示任何队伍
+    // 来源为"上一阶段晋级"的阶段，未晋级前只展示手动添加的队伍
     const activeStage = stages.find((s) => s.stageId === activeStageId);
     if (activeStage?.entrant?.source?.type === 'FROM_PREVIOUS_STAGE') {
-      return [];
+      return extra;
     }
-    return approvedTeams;
-  }, [activeStageId, advancedTeams, approvedTeams, stages]);
+    return [...approvedTeams, ...extra];
+  }, [activeStageId, advancedTeams, approvedTeams, stages, extraTeams]);
 
-  // 未排入对阵图的可用队伍（供一键排布判断是否禁用）
-  const stagePoolTeams = useMemo((): TeamPoolItem[] =>
-    allStageTeams.filter((t) => !activeStageAssignedNames.has(t.teamName || t.userNickname)),
-  [allStageTeams, activeStageAssignedNames]);
+  // 未排入对阵图的可用队伍：用计数而非集合，正确处理同名队伍
+  const stagePoolTeams = useMemo((): TeamPoolItem[] => {
+    // 统计对阵图里每个名字已占用几个槽
+    const assignedCounts = new Map<string, number>();
+    rounds
+      .filter((r) => r.stageId === activeStageId || !activeStageId)
+      .forEach((round) =>
+        round.matches.forEach((game) => {
+          if (!game.teamAIsPlaceholder) assignedCounts.set(game.teamA, (assignedCounts.get(game.teamA) || 0) + 1);
+          if (!game.teamBIsPlaceholder) assignedCounts.set(game.teamB, (assignedCounts.get(game.teamB) || 0) + 1);
+        })
+      );
+    // 按名字消耗计数：每遇到一个同名队伍先消耗一个"已分配"配额
+    const usedCounts = new Map<string, number>();
+    return allStageTeams.filter((t) => {
+      const name = t.teamName || t.userNickname;
+      const assigned = assignedCounts.get(name) || 0;
+      const used = usedCounts.get(name) || 0;
+      if (used < assigned) { usedCounts.set(name, used + 1); return false; }
+      return true;
+    });
+  }, [rounds, activeStageId, allStageTeams]);
 
   const handleAssignTeam = (roundId: string, gameId: string, side: 'A' | 'B', team: TeamPoolItem) => {
     const teamName = team.teamName || team.userNickname;
@@ -77,140 +93,243 @@ export default function MatchCompetitionMgmt({ onTeamClick }: { onTeamClick?: (t
     }
   };
 
+  const handleAddTeam = (name: string) => {
+    if (!activeStageId || !name.trim()) return;
+    const trimmed = name.trim();
+    const newTeam: TeamPoolItem = {
+      userId: `custom-${Date.now()}-${trimmed}`,
+      userNickname: trimmed,
+      teamName: trimmed,
+    };
+    setExtraTeams(prev => ({ ...prev, [activeStageId]: [...(prev[activeStageId] || []), newTeam] }));
+  };
+
+  const handleRemoveExtraTeam = (userId: string) => {
+    if (!activeStageId) return;
+    setExtraTeams(prev => ({ ...prev, [activeStageId]: (prev[activeStageId] || []).filter(t => t.userId !== userId) }));
+  };
+
   if (!match) {
     return <div className="text-center py-12 text-slate-400 text-sm">未选择赛事</div>;
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-medium text-slate-800">比赛编排</div>
+    <BracketView
+      rounds={rounds}
+      stages={stages}
+      activeStageId={activeStageId}
+      availableTeams={stagePoolTeams}
+      allStageTeams={allStageTeams}
+      activeStageAssignedNames={activeStageAssignedNames}
+      isAdvanced={activeStageId ? (advancedTeams[activeStageId] ?? []).length > 0 : false}
+      onStageChange={setActiveStageId}
+      onAssignTeam={handleAssignTeam}
+      onClearSlot={handleClearSlot}
+      onUpdateGame={handleUpdateGame}
+      onAssignGroupSlot={assignGroupSlot}
+      onClearGroupSlot={clearGroupSlot}
+      onPairSwissRound={(stageId, groupIndex) => {
+        pairSwissRound(stageId, groupIndex);
+        showToast('已根据当前积分配对下一轮', 'success');
+      }}
+      onAutoAssignStage={(stageId) => {
+        autoAssignStage(stageId);
+        showToast('已自动排布此阶段队伍', 'success');
+      }}
+      onClearStage={(stageId) => {
+        clearStage(stageId);
+        showToast('已清空此阶段排布', 'info');
+      }}
+      onAdvanceTeams={(currentStageId, nextStageId, teams) => {
+        advanceTeams(currentStageId, nextStageId, teams);
+        showToast(`已将 ${teams.length} 支队伍记录为晋级，请前往下一阶段排布`, 'success');
+      }}
+      onAddExtraRound={(stageId, groupIndex, teamA, teamB) => {
+        addExtraRound(stageId, groupIndex, teamA, teamB);
+        showToast('已添加加赛场次', 'success');
+      }}
+      onAddFreeGame={(stageId, teamA, teamB, format, roundName) => {
+        addFreeGame(stageId, teamA, teamB, format, roundName);
+        showToast(`已创建比赛：${teamA} vs ${teamB}`, 'success');
+      }}
+      onDeleteFreeRound={(roundId) => {
+        deleteFreeRound(roundId);
+        showToast('已删除比赛', 'info');
+      }}
+      onTeamClick={onTeamClick}
+      onAddTeam={handleAddTeam}
+      onRemoveExtraTeam={handleRemoveExtraTeam}
+      onUpdateStageMeta={(stageId, scoring) => {
+        updateStageMeta(stageId, scoring);
+        showToast('积分规则已更新', 'success');
+      }}
+    />
+  );
+}
+
+function ScoringRulesEditor({
+  stage,
+  onSave,
+  onCancel,
+}: {
+  stage: TournamentStage;
+  onSave: (scoring: { winPoints: number; drawPoints: number; lossPoints: number }) => void;
+  onCancel: () => void;
+}) {
+  const [win, setWin] = useState(stage.config.winPoints ?? 3);
+  const [draw, setDraw] = useState(stage.config.drawPoints ?? 1);
+  const [loss, setLoss] = useState(stage.config.lossPoints ?? 0);
+
+  return (
+    <div className="border border-primary/30 bg-primary/5 rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-primary">积分规则</span>
+        <button onClick={onCancel} className="text-slate-400 hover:text-slate-600"><X size={13} /></button>
       </div>
-
-        <div className="flex items-center border-b border-slate-200 overflow-x-auto">
-          {subTabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setSubTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm whitespace-nowrap transition-colors ${
-                  subTab === tab.key
-                    ? 'text-primary border-b-2 border-primary font-medium'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <Icon size={14} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          {subTab === 'bracket' && (
-            <BracketView
-              rounds={rounds}
-              stages={stages}
-              activeStageId={activeStageId}
-              availableTeams={stagePoolTeams}
-              allStageTeams={allStageTeams}
-              activeStageAssignedNames={activeStageAssignedNames}
-              isAdvanced={activeStageId ? (advancedTeams[activeStageId] ?? []).length > 0 : false}
-              onStageChange={setActiveStageId}
-              onAssignTeam={handleAssignTeam}
-              onClearSlot={handleClearSlot}
-              onUpdateGame={handleUpdateGame}
-              onAssignGroupSlot={assignGroupSlot}
-              onClearGroupSlot={clearGroupSlot}
-              onPairSwissRound={(stageId, groupIndex) => {
-                pairSwissRound(stageId, groupIndex);
-                showToast('已根据当前积分配对下一轮', 'success');
-              }}
-              onAutoAssignStage={(stageId) => {
-                autoAssignStage(stageId);
-                showToast('已自动排布此阶段队伍', 'success');
-              }}
-              onClearStage={(stageId) => {
-                clearStage(stageId);
-                showToast('已清空此阶段排布', 'info');
-              }}
-              onAdvanceTeams={(currentStageId, nextStageId, teams) => {
-                advanceTeams(currentStageId, nextStageId, teams);
-                showToast(`已将 ${teams.length} 支队伍记录为晋级，请前往下一阶段排布`, 'success');
-              }}
-              onAddExtraRound={(stageId, groupIndex, teamA, teamB) => {
-                addExtraRound(stageId, groupIndex, teamA, teamB);
-                showToast('已添加加赛场次', 'success');
-              }}
-              onTeamClick={onTeamClick}
+      <div className="flex items-center gap-4 flex-wrap">
+        {([
+          { label: '胜场积分', value: win, set: setWin },
+          { label: '平局积分', value: draw, set: setDraw },
+          { label: '败场积分', value: loss, set: setLoss },
+        ] as { label: string; value: number; set: (v: number) => void }[]).map(({ label, value, set }) => (
+          <div key={label} className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 shrink-0">{label}</span>
+            <input
+              type="number"
+              min={0}
+              value={value}
+              onChange={e => set(Number(e.target.value))}
+              className="w-14 text-sm px-2 py-1 border border-slate-200 rounded-lg focus:border-primary outline-none text-center bg-white"
             />
-          )}
-          {subTab === 'results' && <MatchResultInput matchId={match.id} rounds={rounds} stages={stages} />}
-        </div>
+          </div>
+        ))}
+        <button
+          onClick={() => onSave({ winPoints: win, drawPoints: draw, lossPoints: loss })}
+          className="text-xs px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+        >
+          保存
+        </button>
+      </div>
     </div>
   );
 }
 
-function AvailableTeamsBar({
+function TeamManagementPanel({
   teams,
   assignedNames,
   isAdvanced,
+  onAddTeam,
+  onRemoveExtraTeam,
 }: {
   teams: TeamPoolItem[];
   assignedNames: Set<string>;
   isAdvanced?: boolean;
+  onAddTeam?: (name: string) => void;
+  onRemoveExtraTeam?: (userId: string) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const assignedCount = teams.filter((t) => assignedNames.has(t.teamName || t.userNickname)).length;
+  const [editing, setEditing] = useState(false);
+  const [newName, setNewName] = useState('');
+  const assignedCount = teams.filter(t => assignedNames.has(t.teamName || t.userNickname)).length;
   const pendingCount = teams.length - assignedCount;
+
+  const handleAdd = () => {
+    if (!newName.trim()) return;
+    onAddTeam?.(newName.trim());
+    setNewName('');
+  };
 
   return (
     <div className={`border rounded-xl overflow-hidden ${isAdvanced ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-black/5 transition-colors"
-      >
-        <Users size={13} className={isAdvanced ? 'text-amber-600' : 'text-primary'} />
-        <span className={`text-sm font-medium ${isAdvanced ? 'text-amber-800' : 'text-slate-700'}`}>
-          {isAdvanced ? '晋级队伍' : '本阶段队伍'}
-          <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-bold ${isAdvanced ? 'bg-amber-200 text-amber-800' : 'bg-primary/10 text-primary'}`}>{teams.length}</span>
-        </span>
-        {assignedCount > 0 && (
-          <span className="text-xs text-emerald-600 font-medium">{assignedCount} 已排入</span>
+      <div className="flex items-center gap-2 px-4 py-2.5">
+        <button onClick={() => setOpen(v => !v)} className="flex items-center gap-2 flex-1 min-w-0">
+          <Users size={13} className={isAdvanced ? 'text-amber-600' : 'text-primary'} />
+          <span className={`text-sm font-medium ${isAdvanced ? 'text-amber-800' : 'text-slate-700'}`}>
+            {isAdvanced ? '晋级队伍' : '本阶段队伍'}
+            <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-bold ${isAdvanced ? 'bg-amber-200 text-amber-800' : 'bg-primary/10 text-primary'}`}>{teams.length}</span>
+          </span>
+          {assignedCount > 0 && (
+            <span className="text-xs text-emerald-600 font-medium">{assignedCount} 已排入</span>
+          )}
+          {pendingCount > 0 && (
+            <span className="text-xs text-slate-400">{pendingCount} 待分配</span>
+          )}
+        </button>
+        <span className="text-xs text-slate-400 hidden sm:block">可拖入对阵图</span>
+        {onAddTeam && (
+          <button
+            onClick={() => { setEditing(v => !v); setNewName(''); }}
+            title={editing ? '完成编辑' : '编辑队伍'}
+            className={`p-1 rounded transition-colors ${editing ? 'text-primary' : 'text-slate-400 hover:text-primary'}`}
+          >
+            {editing ? <Check size={13} /> : <Pencil size={13} />}
+          </button>
         )}
-        {pendingCount > 0 && (
-          <span className="text-xs text-slate-400">{pendingCount} 待分配</span>
-        )}
-        <span className="ml-auto text-xs text-slate-400 hidden sm:block">可拖入对阵图重新排布</span>
-        {open ? <ChevronUp size={13} className="text-slate-400 shrink-0" /> : <ChevronDown size={13} className="text-slate-400 shrink-0" />}
-      </button>
+        <button onClick={() => setOpen(v => !v)} className="text-slate-400 shrink-0">
+          {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+      </div>
       {open && (
-        <div className="px-4 pb-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-          {teams.map((team) => {
-            const name = team.teamName || team.userNickname;
-            const isAssigned = assignedNames.has(name);
-            return (
-              <div
-                key={team.userId}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('application/json', JSON.stringify(team));
-                  e.dataTransfer.effectAllowed = 'move';
-                }}
-                title={isAssigned ? `${name}（已排入对阵图，可拖动换位）` : name}
-                className={`flex items-center gap-1.5 px-2.5 py-1 border rounded-full text-sm font-medium cursor-grab active:cursor-grabbing transition-colors ${
-                  isAssigned
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-400'
-                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-primary hover:text-primary'
-                }`}
+        <div className="px-4 pb-3 border-t border-slate-100 pt-3 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {teams.map(team => {
+              const name = team.teamName || team.userNickname;
+              const isAssigned = assignedNames.has(name);
+              const isCustom = team.userId.startsWith('custom-');
+              return (
+                <div
+                  key={team.userId}
+                  draggable={!editing}
+                  onDragStart={e => {
+                    if (editing) return;
+                    e.dataTransfer.setData('application/json', JSON.stringify(team));
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  title={isAssigned ? `${name}（已排入对阵图，可拖动换位）` : name}
+                  className={`flex items-center gap-1 px-2.5 py-1 border rounded-full text-sm font-medium transition-colors ${
+                    isCustom
+                      ? 'bg-violet-50 border-violet-200 text-violet-700'
+                      : isAssigned
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      : 'bg-slate-50 border-slate-200 text-slate-700'
+                  } ${!editing ? 'cursor-grab active:cursor-grabbing hover:border-primary hover:text-primary' : ''}`}
+                >
+                  {!editing && <GripVertical size={10} className="text-slate-300 shrink-0" />}
+                  {name}
+                  {isAssigned && !editing && <span className="text-emerald-500 text-[9px]">✓</span>}
+                  {editing && isCustom && onRemoveExtraTeam && (
+                    <button
+                      onClick={() => onRemoveExtraTeam(team.userId)}
+                      className="ml-0.5 text-violet-400 hover:text-red-500 transition-colors"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {editing && onAddTeam && (
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="text"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                placeholder="输入队伍名称"
+                className="flex-1 text-sm px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-primary"
+                autoFocus
+              />
+              <button
+                onClick={handleAdd}
+                disabled={!newName.trim()}
+                className="flex items-center gap-1 text-sm px-3 py-1.5 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-40 transition-colors"
               >
-                <GripVertical size={10} className={isAssigned ? 'text-emerald-300' : 'text-slate-300'} />
-                {name}
-                {isAssigned && <span className="text-emerald-500 text-[9px]">✓</span>}
-              </div>
-            );
-          })}
+                <Plus size={13} />
+                添加
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -246,7 +365,12 @@ function BracketView({
   onPairSwissRound,
   onAdvanceTeams,
   onAddExtraRound,
+  onAddFreeGame,
+  onDeleteFreeRound,
   onTeamClick,
+  onAddTeam,
+  onRemoveExtraTeam,
+  onUpdateStageMeta,
 }: {
   rounds: MatchRound[];
   stages: TournamentStage[];
@@ -266,9 +390,15 @@ function BracketView({
   onPairSwissRound: (stageId: string, groupIndex: number) => void;
   onAdvanceTeams: (currentStageId: string, nextStageId: string, teams: string[]) => void;
   onAddExtraRound: (stageId: string, groupIndex: number, teamA: string, teamB: string) => void;
+  onAddFreeGame: (stageId: string, teamA: string, teamB: string, format: string, roundName?: string) => void;
+  onDeleteFreeRound: (roundId: string) => void;
   onTeamClick?: (teamName: string) => void;
+  onAddTeam?: (name: string) => void;
+  onRemoveExtraTeam?: (userId: string) => void;
+  onUpdateStageMeta?: (stageId: string, scoring: { winPoints: number; drawPoints: number; lossPoints: number }) => void;
 }) {
   const [showBatchTime, setShowBatchTime] = useState(false);
+  const [showScoring, setShowScoring] = useState(false);
   const [batchRoundId, setBatchRoundId] = useState<string | null>(null);
   const [batchStart, setBatchStart] = useState('');
   const [batchInterval, setBatchInterval] = useState(30);
@@ -292,7 +422,7 @@ function BracketView({
     [activeRounds]
   );
 
-  if (rounds.length === 0) {
+  if (rounds.length === 0 && activeStage?.type !== 'FREE') {
     return (
       <div className="text-center py-12 text-slate-400 text-sm">
         该赛事暂未配置赛程
@@ -320,17 +450,17 @@ function BracketView({
     <div className="space-y-4">
       {stages.length > 0 && (
         <div className="space-y-2">
-          {/* Stage selector + action buttons */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 overflow-x-auto">
+          {/* Stage tabs + action buttons */}
+          <div className="flex items-center justify-between gap-2 border-b border-slate-200">
+            <div className="flex items-center overflow-x-auto">
               {stages.map((stage) => (
                 <button
                   key={stage.stageId}
                   onClick={() => onStageChange(stage.stageId)}
-                  className={`text-sm px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${
+                  className={`text-sm px-4 py-2.5 whitespace-nowrap transition-colors ${
                     activeStageId === stage.stageId
-                      ? 'bg-primary text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'text-primary border-b-2 border-primary font-medium'
+                      : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
                   {stage.name}
@@ -338,18 +468,33 @@ function BracketView({
               ))}
             </div>
             {activeStage && (
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => { setShowBatchTime(v => !v); setBatchRoundId(null); }}
-                  className={`flex items-center gap-1 text-sm px-3 py-1.5 border rounded-lg transition-colors ${
-                    showBatchTime
-                      ? 'border-primary bg-primary/5 text-primary'
-                      : 'border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-primary'
-                  }`}
-                >
-                  <CalendarClock size={12} />
-                  批量设时
-                </button>
+              <div className="flex items-center gap-2 shrink-0 pb-2">
+                {(activeStage.type === 'ROUND_ROBIN' || activeStage.type === 'SWISS' || activeStage.type === 'FREE') && (
+                  <button
+                    onClick={() => { setShowScoring(v => !v); setShowBatchTime(false); }}
+                    className={`flex items-center gap-1 text-sm px-3 py-1.5 border rounded-lg transition-colors ${
+                      showScoring
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-primary'
+                    }`}
+                  >
+                    <SlidersHorizontal size={12} />
+                    积分规则
+                  </button>
+                )}
+                {activeStage.type !== 'FREE' && (
+                  <button
+                    onClick={() => { setShowBatchTime(v => !v); setShowScoring(false); setBatchRoundId(null); }}
+                    className={`flex items-center gap-1 text-sm px-3 py-1.5 border rounded-lg transition-colors ${
+                      showBatchTime
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-primary'
+                    }`}
+                  >
+                    <CalendarClock size={12} />
+                    批量设时
+                  </button>
+                )}
                 <button
                   onClick={() => onClearStage(activeStage.stageId)}
                   className="flex items-center gap-1 text-sm px-3 py-1.5 border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 hover:border-rose-300 hover:text-rose-600 transition-colors"
@@ -423,14 +568,23 @@ function BracketView({
             </div>
           )}
 
-          {/* 本阶段队伍栏 */}
-          {allStageTeams.length > 0 && (
-            <AvailableTeamsBar
-              teams={allStageTeams}
-              assignedNames={activeStageAssignedNames}
-              isAdvanced={isAdvanced}
+          {/* 积分规则面板 */}
+          {showScoring && activeStage && (
+            <ScoringRulesEditor
+              stage={activeStage}
+              onSave={(scoring) => { onUpdateStageMeta?.(activeStage.stageId, scoring); setShowScoring(false); }}
+              onCancel={() => setShowScoring(false)}
             />
           )}
+
+          {/* 队伍管理面板 */}
+          <TeamManagementPanel
+            teams={allStageTeams}
+            assignedNames={activeStageAssignedNames}
+            isAdvanced={isAdvanced}
+            onAddTeam={onAddTeam}
+            onRemoveExtraTeam={onRemoveExtraTeam}
+          />
         </div>
       )}
 
@@ -483,27 +637,42 @@ function BracketView({
               onTeamClick={onTeamClick}
             />
           )}
-          {/* 晋级确认面板：有下一阶段时始终显示，面板内展示完成进度 */}
-          {(activeStage.type === 'ROUND_ROBIN' || activeStage.type === 'SWISS') && (() => {
-            const sortedStages = [...stages].sort((a, b) => a.order - b.order);
-            const currentIdx = sortedStages.findIndex((s) => s.stageId === activeStage.stageId);
-            const nextStage = sortedStages[currentIdx + 1];
-            if (!nextStage) return null;
+          {activeStage.type === 'FREE' && (
+            <FreeBracket
+              rounds={activeRounds}
+              stage={activeStage}
+              availableTeams={allStageTeams}
+              onUpdateGame={onUpdateGame}
+              onAddFreeGame={onAddFreeGame}
+              onDeleteFreeRound={onDeleteFreeRound}
+              onTeamClick={onTeamClick}
+            />
+          )}
+          {/* 晋级确认面板：按 advancement 路由逐条渲染 */}
+          {(activeStage.advancement || []).map((route, idx) => {
+            const targetStage = route.nextStageId ? stages.find((s) => s.stageId === route.nextStageId) : undefined;
             const totalGames = activeRounds.reduce((n, r) => n + r.matches.length, 0);
             const doneGames = activeRounds.reduce(
               (n, r) => n + r.matches.filter((g) => g.status === 'completed' || g.status === 'cancelled').length, 0
             );
             return (
               <AdvancementPanel
+                key={idx}
                 currentStage={activeStage}
-                nextStage={nextStage}
+                route={route}
+                targetStage={targetStage}
                 activeRounds={activeRounds}
+                stages={stages}
                 totalGames={totalGames}
                 doneGames={doneGames}
-                onAdvance={(teams) => onAdvanceTeams(activeStage.stageId, nextStage.stageId, teams)}
+                onAdvance={(teams) => {
+                  if (route.nextStageId) {
+                    onAdvanceTeams(activeStage.stageId, route.nextStageId, teams);
+                  }
+                }}
               />
             );
-          })()}
+          })}
         </div>
       ) : (
         <div className="text-center py-12 text-slate-400 text-sm">该赛事暂未配置赛程</div>
@@ -516,14 +685,18 @@ function BracketView({
 
 function AdvancementPanel({
   currentStage,
-  nextStage,
+  route,
+  targetStage,
+  stages,
   activeRounds,
   totalGames,
   doneGames,
   onAdvance,
 }: {
   currentStage: TournamentStage;
-  nextStage: TournamentStage;
+  route: AdvancementConfig;
+  targetStage?: TournamentStage;   // undefined = 最后赛段名次记录
+  stages: TournamentStage[];
   activeRounds: MatchRound[];
   totalGames: number;
   doneGames: number;
@@ -531,6 +704,7 @@ function AdvancementPanel({
 }) {
   const [open, setOpen] = useState(false);
   const allDone = totalGames > 0 && doneGames === totalGames;
+  const isWinnerTracking = !targetStage; // 无目标赛段 = 最终名次
 
   const groupedStandings = useMemo((): { label: string; standings: GroupStanding[]; quota: number }[] => {
     const winPts = currentStage.config.winPoints ?? 3;
@@ -538,13 +712,12 @@ function AdvancementPanel({
     const lossPts = currentStage.config.lossPoints ?? 0;
 
     const groupCount = currentStage.group?.enabled ? currentStage.group.groupCount : 1;
-    // 优先从 advancement 规则取每组名额，再回退到 teamsOut 均分
     const qualifierPerGroup =
-      currentStage.advancement?.type === 'TOP_N_PER_GROUP'
-        ? (currentStage.advancement.countPerGroup ?? 1)
-        : currentStage.advancement?.type === 'GLOBAL_TOP_N'
-          ? Math.ceil((currentStage.advancement.totalCount ?? currentStage.teamsOut) / Math.max(1, groupCount))
-          : Math.ceil((currentStage.teamsOut ?? 1) / Math.max(1, groupCount));
+      route.type === 'TOP_N_PER_GROUP'
+        ? (route.countPerGroup ?? 1)
+        : route.type === 'GLOBAL_TOP_N'
+          ? Math.ceil((route.totalCount ?? 1) / Math.max(1, groupCount))
+          : 1;
 
     if (currentStage.type === 'SWISS') {
       return Array.from({ length: groupCount }, (_, g) => {
@@ -553,10 +726,7 @@ function AdvancementPanel({
         return {
           label: groupCount > 1 ? `第 ${g + 1} 组` : '总排名',
           standings,
-          quota: groupCount > 1 ? qualifierPerGroup
-            : (currentStage.advancement?.type === 'GLOBAL_TOP_N'
-                ? (currentStage.advancement.totalCount ?? currentStage.teamsOut)
-                : currentStage.teamsOut),
+          quota: groupCount > 1 ? qualifierPerGroup : (route.totalCount ?? currentStage.teamsOut),
         };
       });
     }
@@ -565,7 +735,7 @@ function AdvancementPanel({
       const standings = computeGroupStandings(activeRounds, g, winPts, drawPts, lossPts);
       return { label: groupCount > 1 ? `第 ${g + 1} 组` : '积分榜', standings, quota: qualifierPerGroup };
     });
-  }, [currentStage, activeRounds]);
+  }, [currentStage, route, activeRounds]);
 
   const defaultSelected = useMemo(() => {
     const set = new Set<string>();
@@ -598,11 +768,15 @@ function AdvancementPanel({
         onClick={() => setOpen((v) => !v)}
         className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${allDone ? 'bg-amber-50 hover:bg-amber-100' : 'bg-slate-50 hover:bg-slate-100'}`}
       >
-        <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
+        <div className="flex items-center gap-2 text-sm font-medium">
           <Trophy size={14} className={allDone ? 'text-amber-600' : 'text-slate-400'} />
-          <span className={allDone ? 'text-amber-800' : 'text-slate-600'}>晋级管理</span>
+          <span className={allDone ? 'text-amber-800' : 'text-slate-600'}>
+            {isWinnerTracking ? '最终名次' : '晋级管理'}
+          </span>
           <span className={`text-sm font-normal ${allDone ? 'text-amber-600' : 'text-slate-400'}`}>
-            → {nextStage.name}，计划晋级 {totalQuota} 队
+            {isWinnerTracking
+              ? `计划记录 ${totalQuota} 支获胜队伍`
+              : `→ ${targetStage!.name}，计划晋级 ${totalQuota} 队`}
           </span>
           {!allDone && totalGames > 0 && (
             <span className="text-xs px-1.5 py-0.5 bg-slate-200 text-slate-500 rounded-full">
@@ -618,7 +792,7 @@ function AdvancementPanel({
           {!allDone && (
             <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
               <Trophy size={13} />
-              尚有 {totalGames - doneGames} 场比赛未完成，当前积分榜仅供参考，确认无误后再执行晋级。
+              尚有 {totalGames - doneGames} 场比赛未完成，当前积分榜仅供参考，确认无误后再执行{isWinnerTracking ? '名次确认' : '晋级'}。
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -626,7 +800,9 @@ function AdvancementPanel({
               <div key={label} className="border border-slate-200 rounded-lg overflow-hidden">
                 <div className="px-3 py-2 bg-slate-50 text-sm font-bold text-slate-700 border-b border-slate-200 flex items-center justify-between">
                   <span>{label}</span>
-                  <span className="text-slate-400 font-normal text-xs">晋级名额 {quota}</span>
+                  <span className="text-slate-400 font-normal text-xs">
+                    {isWinnerTracking ? '获胜名额' : '晋级名额'} {quota}
+                  </span>
                 </div>
                 {standings.length === 0 ? (
                   <div className="p-4 text-sm text-slate-400 text-center">暂无成绩</div>
@@ -661,7 +837,9 @@ function AdvancementPanel({
                             <span>{s.wins}胜{s.losses}负</span>
                           </div>
                           {isInQuota && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full shrink-0">晋级</span>
+                            <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full shrink-0">
+                              {isWinnerTracking ? '获胜' : '晋级'}
+                            </span>
                           )}
                         </label>
                       );
@@ -674,7 +852,7 @@ function AdvancementPanel({
 
           <div className="flex items-center justify-between pt-2 border-t border-slate-100">
             <div className="text-sm text-slate-500">
-              已选 <span className="font-bold text-slate-700">{selected.size}</span> 支队伍 / 计划晋级 {totalQuota} 支
+              已选 <span className="font-bold text-slate-700">{selected.size}</span> 支队伍 / 计划 {totalQuota} 支
               {selected.size !== totalQuota && (
                 <span className="ml-1 text-amber-600">（与计划名额不符，请确认）</span>
               )}
@@ -700,7 +878,7 @@ function AdvancementPanel({
                 disabled={selected.size === 0}
                 className="text-sm px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 font-medium"
               >
-                确认晋级 →
+                {isWinnerTracking ? '确认名次' : '确认晋级 →'}
               </button>
             </div>
           </div>

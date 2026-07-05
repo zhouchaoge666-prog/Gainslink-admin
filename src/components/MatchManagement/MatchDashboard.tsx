@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import {
   Trophy, Activity, Users, Clock, Award, CalendarDays, ArrowUpRight, CheckCircle,
-  ShieldCheck, X, Check,
+  ShieldCheck, X, Check, Shield,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { MatchItem } from '../../data/mockData';
+import { teamListData } from '../../data/mockData';
 
 type KpiFilter = 'pendingReview' | 'pendingPublish' | 'pendingSignupAudit' | 'live' | 'open' | 'pendingResult' | 'pendingPoints' | null;
 type Granularity = 'day' | 'week' | 'month';
@@ -437,7 +438,7 @@ export default function MatchDashboard({ matches, onViewMatch, onApprove, onReje
   const [kpiFilter, setKpiFilter] = useState<KpiFilter>(null);
 
   const now = new Date();
-  const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const oneWeekAgo   = new Date(now);
   oneWeekAgo.setDate(now.getDate() - 7);
   const weekAgoStr   = oneWeekAgo.toISOString().slice(0, 10);
@@ -450,8 +451,10 @@ export default function MatchDashboard({ matches, onViewMatch, onApprove, onReje
     open:               matches.filter((m) => m.status === 'open' || m.status === 'closing').length,
     pendingResult:      matches.filter((m) => m.status === 'ended').length,
     pendingPoints:      matches.filter((m) => m.status === 'ended' && m.pointsPool > 0).length,
-    monthTotal:         matches.filter((m) => m.matchStart.startsWith(currentMonth)).length,
+    monthTotal:         matches.filter((m) => m.matchStart.startsWith(currentMonthPrefix)).length,
     weekNew:            matches.filter((m) => m.createdAt >= weekAgoStr).length,
+    totalTeams:         teamListData.filter((t) => t.status === 'active').length,
+    newTeamsMonth:      teamListData.filter((t) => t.createdAt.startsWith(currentMonthPrefix)).length,
   };
 
   const pendingMatches = useMemo(() => filterByKpi(matches, kpiFilter), [matches, kpiFilter]);
@@ -476,7 +479,7 @@ export default function MatchDashboard({ matches, onViewMatch, onApprove, onReje
     { key: 'open',               label: '报名中赛事', value: stats.open,               icon: Trophy,       color: 'emerald', clickable: true },
     { key: 'pendingResult',      label: '待录入成绩', value: stats.pendingResult,      icon: Award,        color: 'rose',    clickable: true },
     { key: null,                 label: '本月赛事数', value: stats.monthTotal,         icon: CalendarDays, color: 'slate',   clickable: false },
-    { key: null,                 label: '本周新增',   value: stats.weekNew,            icon: CheckCircle,  color: 'emerald', clickable: false },
+    { key: null,                 label: '注册战队数', value: stats.totalTeams,         icon: Shield,       color: 'violet',  clickable: false },
   ];
 
   return (
@@ -517,6 +520,24 @@ export default function MatchDashboard({ matches, onViewMatch, onApprove, onReje
 
       {/* 趋势图 */}
       <TrendChart />
+
+      {/* 战队概况 */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <div className="text-sm font-medium text-slate-800 mb-3">战队概况</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: '注册战队', value: teamListData.length, cls: 'text-primary' },
+            { label: '正常战队', value: teamListData.filter((t) => t.status === 'active').length, cls: 'text-emerald-600' },
+            { label: '本月新增', value: stats.newTeamsMonth, cls: 'text-blue-600' },
+            { label: '已禁用', value: teamListData.filter((t) => t.status === 'disabled').length, cls: 'text-rose-500' },
+          ].map(({ label, value, cls }) => (
+            <div key={label} className="text-center py-2">
+              <div className={`text-2xl font-bold ${cls}`}>{value}</div>
+              <div className="text-xs text-slate-400 mt-0.5">{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

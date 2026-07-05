@@ -28,6 +28,9 @@ export type MatchAction =
   | { type: 'AUTO_ASSIGN_STAGE'; payload: { stageId: string } }
   | { type: 'CLEAR_STAGE'; payload: { stageId: string } }
   | { type: 'ADD_EXTRA_ROUND'; payload: { stageId: string; groupIndex: number; teamA: string; teamB: string; format?: string } }
+  | { type: 'ADD_FREE_GAME'; payload: { stageId: string; teamA: string; teamB: string; format?: string; roundName?: string } }
+  | { type: 'DELETE_FREE_ROUND'; payload: { roundId: string } }
+  | { type: 'UPDATE_STAGE_META'; payload: { stageId: string; scoring: { winPoints: number; drawPoints: number; lossPoints: number } } }
   | { type: 'SHOW_TOAST'; payload: { message: string; type: 'success' | 'error' | 'info' } }
   | { type: 'HIDE_TOAST' };
 

@@ -92,18 +92,29 @@ export default function MatchManagement({ activeSubTab }: MatchManagementProps) 
     const finalMatch: MatchItem = { ...match, status: publish ? 'open' : 'draft' };
     const rounds = generateMatchRounds(finalMatch, finalMatch.stages);
     storage.saveRounds(finalMatch.id, rounds);
-    setMatches((prev) => [finalMatch, ...prev]);
-    setView('list');
+    // 草稿用相同 ID 多次保存时做 upsert，避免列表重复
+    setMatches((prev) => {
+      const idx = prev.findIndex((m) => m.id === finalMatch.id);
+      return idx >= 0
+        ? prev.map((m) => (m.id === finalMatch.id ? finalMatch : m))
+        : [finalMatch, ...prev];
+    });
+    // 发布时跳回列表；保存草稿时留在创建页面继续编辑
+    if (publish) setView('list');
   };
 
-  const getApprovedTeams = (matchId: string): TeamPoolItem[] =>
-    signupAuditData
-      .filter((item) => item.matchId === matchId && item.status === 'approved')
+  const getApprovedTeams = (matchId: string): TeamPoolItem[] => {
+    // 优先读 localStorage 里用户实际审核的数据，回退到 mock 数据
+    const saved = storage.getSignup(matchId);
+    const source = saved.length > 0 ? saved : signupAuditData.filter((i) => i.matchId === matchId);
+    return source
+      .filter((item) => item.status === 'approved')
       .map((item) => ({
         userId: item.userId,
         userNickname: item.userNickname,
         teamName: item.teamName,
       }));
+  };
 
   const selectedApprovedTeams = useMemo(() => selectedMatch ? getApprovedTeams(selectedMatch.id) : [], [selectedMatch]);
 

@@ -1,6 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component, type ReactNode } from 'react';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-4 bg-red-50 border border-red-300 rounded-xl text-sm text-red-800 space-y-2">
+          <div className="font-bold">⚠ 渲染错误（请截图发给开发者）</div>
+          <pre className="text-xs whitespace-pre-wrap break-all bg-red-100 rounded p-2">
+            {(this.state.error as Error).message}
+            {'\n'}
+            {(this.state.error as Error).stack?.slice(0, 800)}
+          </pre>
+          <button
+            className="text-xs px-3 py-1 bg-red-600 text-white rounded-lg"
+            onClick={() => this.setState({ error: null })}
+          >重试</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import {
   Trophy,
+  Award,
   CalendarDays,
   FileText,
   Shield,
@@ -24,6 +49,7 @@ import type { MatchItem } from '../../data/mockData';
 import { useMatch, useMatchActions } from '../../context/matchHooks';
 import MatchSignupAudit from './MatchSignupAudit';
 import MatchCompetitionMgmt from './MatchCompetitionMgmt';
+import MatchResultInput from './MatchResultInput';
 import StageManager from './StageManager';
 import UserDrawer from './UserDrawer';
 import TeamDrawer from './TeamDrawer';
@@ -52,6 +78,7 @@ const detailTabs = [
   { key: 'stages', label: '阶段管理', icon: Settings2 },
   { key: 'signup', label: '报名审核', icon: UsersRound },
   { key: 'competition', label: '比赛管理', icon: Trophy },
+  { key: 'ranking', label: '最终排名', icon: Award },
 ];
 
 const games = ['MLBB', 'Dota 2', 'PUBG', 'eFootball'];
@@ -72,8 +99,7 @@ export default function MatchDetail({ match, onSave, onPublish, onStartMatch, on
     if (!isEditing) setDraft(match);
   }, [match]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 切换 tab 时清除确认状态
-  useEffect(() => { setConfirmAction(null); }, [activeTab]);
+  // 切换 tab 时不重置确认状态，允许用户查阅其他 tab 后返回继续确认
 
   const handleCancelEdit = () => {
     setDraft(match);
@@ -341,7 +367,12 @@ export default function MatchDetail({ match, onSave, onPublish, onStartMatch, on
             />
           )}
           {activeTab === 'competition' && (
-            <MatchCompetitionMgmt onTeamClick={setDrawerTeamName} />
+            <ErrorBoundary>
+              <MatchCompetitionMgmt onTeamClick={setDrawerTeamName} />
+            </ErrorBoundary>
+          )}
+          {activeTab === 'ranking' && (
+            <MatchResultInput matchId={match.id} rounds={state.rounds} stages={state.match?.stages} onViewUser={setDrawerUserId} />
           )}
         </div>
       </div>

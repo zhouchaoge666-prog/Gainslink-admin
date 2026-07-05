@@ -493,7 +493,7 @@ export interface MatchItem {
   stages?: TournamentStage[];
 }
 
-export type StageType = 'ROUND_ROBIN' | 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS';
+export type StageType = 'ROUND_ROBIN' | 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'SWISS' | 'FREE';
 export type StageFormat = StageType;
 
 export type EntrantSourceType = 'MANUAL' | 'REGISTRATION' | 'FROM_PREVIOUS_STAGE';
@@ -626,7 +626,7 @@ export interface TournamentStage {
   match: MatchConfig;
   scoring?: ScoringConfig;
   ranking: RankingConfig;
-  advancement?: AdvancementConfig;
+  advancement?: AdvancementConfig[];
   formatRules: FormatRules;
   manualAdjust: ManualAdjustConfig;
 
@@ -675,6 +675,9 @@ function defaultRankingForFormat(format: StageFormat): RankingConfig {
   if (format === 'SWISS') {
     return { rules: ['MATCH_POINTS', 'MATCH_WINS', 'BUCHHOLZ', 'GAME_DIFFERENCE', 'GAME_WINS', 'HEAD_TO_HEAD', 'SEED'], unresolvedTiePolicy: 'USE_SEED' };
   }
+  if (format === 'FREE') {
+    return { rules: ['SEED'], unresolvedTiePolicy: 'USE_SEED' };
+  }
   return { rules: ['SEED'], unresolvedTiePolicy: 'USE_SEED' };
 }
 
@@ -693,7 +696,7 @@ export function createDefaultStage(
 
   const stage: TournamentStage = {
     stageId,
-    name: `stage${order}`,
+    name: `第${order}赛段`,
     order,
     type,
     entrant: {
@@ -753,16 +756,17 @@ export function syncLegacyStageFields(stage: TournamentStage): TournamentStage {
   const teamsPerGroup = stage.group.enabled
     ? stage.group.teamsPerGroup
     : entrantCount;
-  const qualifierPerGroup = stage.advancement?.type === 'TOP_N_PER_GROUP'
-    ? stage.advancement.countPerGroup
-    : stage.advancement?.type === 'GLOBAL_TOP_N'
-    ? Math.ceil((stage.advancement.totalCount || 0) / groupCount)
+  const primaryRoute = stage.advancement?.[0];
+  const qualifierPerGroup = primaryRoute?.type === 'TOP_N_PER_GROUP'
+    ? primaryRoute.countPerGroup
+    : primaryRoute?.type === 'GLOBAL_TOP_N'
+    ? Math.ceil((primaryRoute.totalCount || 0) / groupCount)
     : 1;
-  const totalAdvance = stage.advancement?.type === 'TOP_N_PER_GROUP'
-    ? groupCount * (stage.advancement.countPerGroup || 0)
-    : stage.advancement?.type === 'GLOBAL_TOP_N'
-    ? stage.advancement.totalCount || 0
-    : 1;
+  const totalAdvance = (stage.advancement || []).reduce((sum, route) => {
+    if (route.type === 'TOP_N_PER_GROUP') return sum + groupCount * (route.countPerGroup || 0);
+    if (route.type === 'GLOBAL_TOP_N') return sum + (route.totalCount || 0);
+    return sum;
+  }, 0) || 1;
 
   let bracketSize = teamsPerGroup;
   if (stage.type === 'SINGLE_ELIMINATION' || stage.type === 'DOUBLE_ELIMINATION') {
@@ -782,8 +786,8 @@ export function syncLegacyStageFields(stage: TournamentStage): TournamentStage {
     swissRounds: stage.formatRules.swiss?.rounds,
     winThreshold: stage.formatRules.swiss?.rounds,
     cycleMode: stage.formatRules.roundRobin?.mode?.toLowerCase() as 'single' | 'double',
-    winPoints: stage.scoring?.winPoints ?? 1,
-    drawPoints: stage.scoring?.drawPoints ?? 0,
+    winPoints: stage.scoring?.winPoints ?? 3,
+    drawPoints: stage.scoring?.drawPoints ?? 1,
     lossPoints: stage.scoring?.lossPoints ?? 0,
   };
 
@@ -801,10 +805,8 @@ export function defaultAdvancementForStage(
   isLast: boolean,
   nextStageId?: string,
   nextStageEntrantCount?: number
-): AdvancementConfig {
-  if (isLast) {
-    return { type: 'NONE', nextStageSeedingPolicy: 'MANUAL' };
-  }
+): AdvancementConfig[] {
+  if (isLast) return [];
   const target = nextStageEntrantCount && nextStageEntrantCount > 0 ? nextStageEntrantCount : undefined;
   const groupCount = stage.group.enabled ? stage.group.groupCount : 1;
 
@@ -812,35 +814,26 @@ export function defaultAdvancementForStage(
     const countPerGroup = target
       ? Math.min(stage.group.teamsPerGroup, Math.max(1, Math.ceil(target / groupCount)))
       : Math.min(2, stage.group.teamsPerGroup);
-    return {
-      type: 'TOP_N_PER_GROUP',
-      nextStageId,
-      countPerGroup,
-      nextStageSeedingPolicy: 'PREVIOUS_STAGE_RANK',
-    };
+    return [{ type: 'TOP_N_PER_GROUP', nextStageId, countPerGroup, nextStageSeedingPolicy: 'PREVIOUS_STAGE_RANK' }];
   }
   if (stage.type === 'SWISS') {
-    return {
+    return [{
       type: 'GLOBAL_TOP_N',
       nextStageId,
       totalCount: target || Math.max(2, Math.floor(stage.entrant.entrantCount / 2)),
       nextStageSeedingPolicy: 'PREVIOUS_STAGE_RANK',
-    };
+    }];
   }
   const countPerGroup = target
     ? Math.max(1, Math.ceil(target / groupCount))
-    : stage.group.enabled
-    ? 1
-    : Math.max(1, stage.entrant.entrantCount);
-  return {
-    type: 'TOP_N_PER_GROUP',
-    nextStageId,
-    countPerGroup,
-    nextStageSeedingPolicy: 'PREVIOUS_STAGE_RANK',
-  };
+    : stage.group.enabled ? 1 : Math.max(1, stage.entrant.entrantCount);
+  return [{ type: 'TOP_N_PER_GROUP', nextStageId, countPerGroup, nextStageSeedingPolicy: 'PREVIOUS_STAGE_RANK' }];
 }
 
 export function formatRulesForType(type: StageFormat, partial?: Partial<FormatRules>): FormatRules {
+  if (type === 'FREE') {
+    return {};
+  }
   if (type === 'ROUND_ROBIN') {
     return {
       roundRobin: {
@@ -1772,7 +1765,7 @@ export function applyTemplate(templateKey: string, maxTeams: number): Tournament
         type: 'SINGLE_ELIMINATION',
         entrant: { entrantCount: powerOfTwo, source: { type: 'REGISTRATION' }, seedingPolicy: { type: 'REGISTRATION_ORDER', allowManualOverride: true } },
         match: { defaultBestOf: 3, allowDraw: false, tieBreakerPolicy: 'NONE', mapScoreEnabled: true, forfeitEnabled: true },
-        advancement: { type: 'NONE', nextStageSeedingPolicy: 'MANUAL' },
+        advancement: [],
         formatRules: formatRulesForType('SINGLE_ELIMINATION'),
       }, 1)];
     case '循环赛':
@@ -1783,7 +1776,7 @@ export function applyTemplate(templateKey: string, maxTeams: number): Tournament
         group: { enabled: false, groupCount: 1, teamsPerGroup: maxTeams, allowUnevenGroups: false, assignmentMode: 'BY_SEED_SNAKE', allowManualAdjust: true },
         match: { defaultBestOf: 1, allowDraw: false, tieBreakerPolicy: 'NONE', mapScoreEnabled: true, forfeitEnabled: true },
         scoring: { winPoints: 3, drawPoints: 1, lossPoints: 0, forfeitWinPoints: 3, forfeitLossPoints: 0 },
-        advancement: { type: 'NONE', nextStageSeedingPolicy: 'MANUAL' },
+        advancement: [],
         formatRules: formatRulesForType('ROUND_ROBIN', { roundRobin: { format: 'ROUND_ROBIN', mode: 'SINGLE' } }),
       }, 1)];
     case '双败淘汰':
@@ -1792,7 +1785,7 @@ export function applyTemplate(templateKey: string, maxTeams: number): Tournament
         type: 'DOUBLE_ELIMINATION',
         entrant: { entrantCount: powerOfTwo, source: { type: 'REGISTRATION' }, seedingPolicy: { type: 'REGISTRATION_ORDER', allowManualOverride: true } },
         match: { defaultBestOf: 3, allowDraw: false, tieBreakerPolicy: 'NONE', mapScoreEnabled: true, forfeitEnabled: true },
-        advancement: { type: 'NONE', nextStageSeedingPolicy: 'MANUAL' },
+        advancement: [],
         formatRules: formatRulesForType('DOUBLE_ELIMINATION'),
       }, 1)];
     case '瑞士轮': {
@@ -1803,7 +1796,7 @@ export function applyTemplate(templateKey: string, maxTeams: number): Tournament
         entrant: { entrantCount: maxTeams, source: { type: 'REGISTRATION' }, seedingPolicy: { type: 'REGISTRATION_ORDER', allowManualOverride: true } },
         match: { defaultBestOf: 1, allowDraw: false, tieBreakerPolicy: 'NONE', mapScoreEnabled: true, forfeitEnabled: true },
         scoring: { winPoints: 1, drawPoints: 0, lossPoints: 0, forfeitWinPoints: 1, forfeitLossPoints: 0 },
-        advancement: { type: 'NONE', nextStageSeedingPolicy: 'MANUAL' },
+        advancement: [],
         formatRules: formatRulesForType('SWISS', { swiss: { format: 'SWISS', rounds, round1Pairing: 'SEED_HIGH_LOW', avoidRepeatOpponent: true, byePolicy: 'LOWEST_SCORE_NO_PREVIOUS_BYE' } }),
       }, 1)];
     }
@@ -1822,7 +1815,7 @@ export function applyTemplate(templateKey: string, maxTeams: number): Tournament
           group: { enabled: true, groupCount, teamsPerGroup: groupSize, allowUnevenGroups: false, assignmentMode: 'BY_SEED_SNAKE', allowManualAdjust: true },
           match: { defaultBestOf: 1, allowDraw: false, tieBreakerPolicy: 'NONE', mapScoreEnabled: true, forfeitEnabled: true },
           scoring: { winPoints: 3, drawPoints: 1, lossPoints: 0, forfeitWinPoints: 3, forfeitLossPoints: 0 },
-          advancement: { type: 'TOP_N_PER_GROUP', nextStageId: stage2Id, countPerGroup: 2, nextStageSeedingPolicy: 'PREVIOUS_STAGE_RANK' },
+          advancement: [{ type: 'TOP_N_PER_GROUP', nextStageId: stage2Id, countPerGroup: 2, nextStageSeedingPolicy: 'PREVIOUS_STAGE_RANK' }],
           formatRules: formatRulesForType('ROUND_ROBIN', { roundRobin: { format: 'ROUND_ROBIN', mode: 'SINGLE' } }),
         }, 1),
         makeStage({
@@ -1831,7 +1824,7 @@ export function applyTemplate(templateKey: string, maxTeams: number): Tournament
           entrant: { entrantCount: knockoutTeams, source: { type: 'FROM_PREVIOUS_STAGE', previousStageId: stage1Id }, seedingPolicy: { type: 'PREVIOUS_STAGE_RANK', allowManualOverride: true } },
           group: { enabled: false, groupCount: 1, teamsPerGroup: knockoutTeams, allowUnevenGroups: false, assignmentMode: 'MANUAL', allowManualAdjust: true },
           match: { defaultBestOf: 3, allowDraw: false, tieBreakerPolicy: 'NONE', mapScoreEnabled: true, forfeitEnabled: true },
-          advancement: { type: 'NONE', nextStageSeedingPolicy: 'MANUAL' },
+          advancement: [],
           formatRules: formatRulesForType('SINGLE_ELIMINATION'),
         }, 2),
       ];
@@ -1864,7 +1857,8 @@ function generateSingleEliminationStage(
     : Math.floor(stage.teamsIn / groupCount);
   const rawBracketSize = stage.config.bracketSize || groupSize;
   const bracketSize = Math.max(2, Math.pow(2, Math.ceil(Math.log2(rawBracketSize))));
-  const slotList = slots.length >= stage.teamsIn ? slots : generatePlaceholderSlots(stage.teamsIn);
+  const totalSlotsNeededSE = groupCount * groupSize;
+  const slotList = slots.length >= totalSlotsNeededSE ? slots : generatePlaceholderSlots(totalSlotsNeededSE);
   let roundNumber = roundOffset + 1;
 
   for (let g = 0; g < groupCount; g++) {
@@ -2006,7 +2000,9 @@ function generateRoundRobinStage(
     : Math.floor(stage.teamsIn / groupCount);
   const cycleMode = stage.config.cycleMode || 'single';
   const cycles = cycleMode === 'double' ? 2 : 1;
-  const slotList = slots.length >= stage.teamsIn ? slots : generatePlaceholderSlots(stage.teamsIn);
+  // 用 groupCount × groupSize 而非 teamsIn 做长度检查，防止 entrantCount 未同步时导致后几组无槽位
+  const totalSlotsNeeded = groupCount * groupSize;
+  const slotList = slots.length >= totalSlotsNeeded ? slots : generatePlaceholderSlots(totalSlotsNeeded);
   let roundNumber = roundOffset + 1;
 
   for (let g = 0; g < groupCount; g++) {
@@ -2062,7 +2058,8 @@ function generateDoubleEliminationStage(
     : Math.floor(stage.teamsIn / groupCount);
   const rawBracketSize = stage.config.bracketSize || groupSize;
   const bracketSize = Math.max(2, Math.pow(2, Math.ceil(Math.log2(rawBracketSize))));
-  const slotList = slots.length >= stage.teamsIn ? slots : generatePlaceholderSlots(stage.teamsIn);
+  const totalSlotsNeededDE = groupCount * groupSize;
+  const slotList = slots.length >= totalSlotsNeededDE ? slots : generatePlaceholderSlots(totalSlotsNeededDE);
   let roundNumber = roundOffset + 1;
 
   for (let g = 0; g < groupCount; g++) {
@@ -2411,32 +2408,7 @@ export function validateStages(stages: TournamentStage[], maxTeams: number, stri
     }
   }
 
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const stage = sorted[i];
-    const next = sorted[i + 1];
-    const groupCount = stage.group.enabled ? stage.group.groupCount : 1;
-    const totalAdvance =
-      stage.advancement?.type === 'TOP_N_PER_GROUP'
-        ? groupCount * (stage.advancement.countPerGroup || 0)
-        : stage.advancement?.type === 'GLOBAL_TOP_N'
-        ? stage.advancement.totalCount || 0
-        : 0;
-
-    if (!stage.advancement || stage.advancement.type === 'NONE') {
-      return `阶段 ${i + 1} 不是最后赛段，需要配置晋级规则`;
-    }
-    if (totalAdvance < 1) {
-      return `阶段 ${i + 1} 晋级队伍数不能为 0`;
-    }
-    if (totalAdvance !== next.entrant.entrantCount) {
-      return `阶段 ${i + 1} 晋级队伍数 (${totalAdvance}) 与阶段 ${i + 2} 参赛队伍数 (${next.entrant.entrantCount}) 不一致`;
-    }
-  }
-
-  const last = sorted[sorted.length - 1];
-  if (last.advancement && last.advancement.type !== 'NONE') {
-    return `最后阶段 (${last.name}) 的晋级方式应为「无晋级」`;
-  }
+  // 仅做轻量校验：各阶段内部结构合法即可；晋级通道路由由用户自行维护
 
   return null;
 }
@@ -2476,6 +2448,10 @@ export function generateMatchRounds(match: MatchItem, stages?: TournamentStage[]
           break;
         case 'SWISS':
           stageRounds = generateSwissStage(match, stage, index, baseDate, roundOffset, stageSlots);
+          break;
+        case 'FREE':
+          // 自由排布：不预生成任何轮次，由用户手动创建比赛
+          stageRounds = [];
           break;
       }
 
@@ -2681,11 +2657,12 @@ export function mergeRoundData(fresh: MatchRound[], saved: MatchRound[]): MatchR
   const savedMap = new Map<string, Partial<MatchGame>>();
   saved.forEach((r) =>
     r.matches.forEach((g) => {
+      // 只在队伍名实际存在且已完成分配（非占位）时才恢复队伍信息，
+      // 防止旧版 bug 留下的 teamA:undefined + teamAIsPlaceholder:false
+      // 通过扩展运算符覆盖掉 fresh 数据中正确的占位信息。
       savedMap.set(g.gameId, {
-        teamA: g.teamA,
-        teamAIsPlaceholder: g.teamAIsPlaceholder,
-        teamB: g.teamB,
-        teamBIsPlaceholder: g.teamBIsPlaceholder,
+        ...(g.teamA && !g.teamAIsPlaceholder ? { teamA: g.teamA, teamAIsPlaceholder: false } : {}),
+        ...(g.teamB && !g.teamBIsPlaceholder ? { teamB: g.teamB, teamBIsPlaceholder: false } : {}),
         scoreA: g.scoreA,
         scoreB: g.scoreB,
         winner: g.winner,
@@ -3192,5 +3169,174 @@ export const matchResultData: MatchResultRecord[] = [
   { id: 'MR-1004', matchId: '#M1014', userId: 'U-3321', userNickname: 'LunaStar', rank: 1, score: 76, pointsEarned: 3000, status: 'pending' },
   { id: 'MR-1005', matchId: '#M1014', userId: 'U-7065', userNickname: 'ShadowHunter', rank: 2, score: 70, pointsEarned: 2000, status: 'pending' },
   { id: 'MR-1006', matchId: '#M1011', userId: 'U-2210', userNickname: 'DragonSlayer', rank: 1, score: 65, pointsEarned: 1500, status: 'pending' },
+];
+
+// ─── 战队管理 ────────────────────────────────────────────────────────────────
+
+export type TeamStatus = 'active' | 'disabled';
+
+export interface TeamMember {
+  userId: string;
+  nickname: string;
+  role: 'captain' | 'member';
+  joinedAt: string;
+}
+
+export interface TeamMatchRecord {
+  matchId: string;
+  matchName: string;
+  game: string;
+  result: '冠军' | '亚军' | '季军' | '晋级' | '淘汰' | '参赛';
+  date: string;
+}
+
+export interface TeamItem {
+  id: string;
+  name: string;
+  logo?: string;
+  game: string;
+  region: string;
+  captainId: string;
+  captainName: string;
+  memberCount: number;
+  matchCount: number;
+  status: TeamStatus;
+  createdAt: string;
+  description?: string;
+  members: TeamMember[];
+  recentMatches: TeamMatchRecord[];
+}
+
+export const teamListData: TeamItem[] = [
+  {
+    id: 'T-0001', name: 'Alpha Wolves', game: 'MLBB', region: '菲律宾',
+    captainId: 'U-7715', captainName: 'PlayerOne', memberCount: 5, matchCount: 12,
+    status: 'active', createdAt: '2025-11-03',
+    description: '来自马尼拉的职业玩家战队，专注 MLBB 赛场。',
+    members: [
+      { userId: 'U-7715', nickname: 'PlayerOne', role: 'captain', joinedAt: '2025-11-03' },
+      { userId: 'U-1109', nickname: 'PixelHero', role: 'member', joinedAt: '2025-11-04' },
+      { userId: 'U-5543', nickname: 'NoobMaster', role: 'member', joinedAt: '2025-11-05' },
+      { userId: 'U-3321', nickname: 'LunaStar', role: 'member', joinedAt: '2025-11-10' },
+      { userId: 'U-7065', nickname: 'ShadowHunter', role: 'member', joinedAt: '2025-11-15' },
+    ],
+    recentMatches: [
+      { matchId: '#M1018', matchName: 'MLBB 全国公开赛 S3', game: 'MLBB', result: '冠军', date: '2026-05-28' },
+      { matchId: '#M1014', matchName: 'Gainslink 积分赛 R4', game: 'MLBB', result: '亚军', date: '2026-04-15' },
+      { matchId: '#M1011', matchName: 'MLBB 挑战者杯', game: 'MLBB', result: '晋级', date: '2026-03-20' },
+    ],
+  },
+  {
+    id: 'T-0002', name: 'Storm Riders', game: 'Dota 2', region: '泰国',
+    captainId: 'U-2210', captainName: 'DragonSlayer', memberCount: 7, matchCount: 8,
+    status: 'active', createdAt: '2025-12-18',
+    members: [
+      { userId: 'U-2210', nickname: 'DragonSlayer', role: 'captain', joinedAt: '2025-12-18' },
+      { userId: 'U-4412', nickname: 'TigerKing', role: 'member', joinedAt: '2025-12-20' },
+      { userId: 'U-8834', nickname: 'SkyBreaker', role: 'member', joinedAt: '2025-12-22' },
+      { userId: 'U-6601', nickname: 'IceWolf', role: 'member', joinedAt: '2026-01-05' },
+      { userId: 'U-3398', nickname: 'FireStorm', role: 'member', joinedAt: '2026-01-08' },
+      { userId: 'U-9921', nickname: 'GhostBlade', role: 'member', joinedAt: '2026-01-15' },
+      { userId: 'U-1127', nickname: 'NightOwl', role: 'member', joinedAt: '2026-02-01' },
+    ],
+    recentMatches: [
+      { matchId: '#M1009', matchName: 'Dota 2 东南亚联赛', game: 'Dota 2', result: '季军', date: '2026-05-10' },
+      { matchId: '#M1006', matchName: 'Gainslink 积分赛 R3', game: 'Dota 2', result: '淘汰', date: '2026-04-02' },
+    ],
+  },
+  {
+    id: 'T-0003', name: 'Phantom Squad', game: 'PUBG', region: '越南',
+    captainId: 'U-5503', captainName: 'ZeroGrav', memberCount: 4, matchCount: 5,
+    status: 'active', createdAt: '2026-01-09',
+    members: [
+      { userId: 'U-5503', nickname: 'ZeroGrav', role: 'captain', joinedAt: '2026-01-09' },
+      { userId: 'U-7720', nickname: 'AceStar', role: 'member', joinedAt: '2026-01-10' },
+      { userId: 'U-4480', nickname: 'BlitzRun', role: 'member', joinedAt: '2026-01-12' },
+      { userId: 'U-9912', nickname: 'VoidWalker', role: 'member', joinedAt: '2026-01-20' },
+    ],
+    recentMatches: [
+      { matchId: '#M1020', matchName: 'PUBG 东南亚公开赛', game: 'PUBG', result: '参赛', date: '2026-06-01' },
+      { matchId: '#M1017', matchName: 'Gainslink PUBG 月赛', game: 'PUBG', result: '亚军', date: '2026-05-05' },
+    ],
+  },
+  {
+    id: 'T-0004', name: 'Neon Blaze', game: 'MLBB', region: '印度尼西亚',
+    captainId: 'U-6631', captainName: 'NeonKnight', memberCount: 6, matchCount: 19,
+    status: 'active', createdAt: '2025-09-22',
+    members: [
+      { userId: 'U-6631', nickname: 'NeonKnight', role: 'captain', joinedAt: '2025-09-22' },
+      { userId: 'U-8810', nickname: 'RedArrow', role: 'member', joinedAt: '2025-09-25' },
+      { userId: 'U-2244', nickname: 'BlueFang', role: 'member', joinedAt: '2025-10-01' },
+      { userId: 'U-1165', nickname: 'WhiteStorm', role: 'member', joinedAt: '2025-10-05' },
+      { userId: 'U-3377', nickname: 'GreenFlash', role: 'member', joinedAt: '2025-10-10' },
+      { userId: 'U-7788', nickname: 'PurpleRain', role: 'member', joinedAt: '2025-10-18' },
+    ],
+    recentMatches: [
+      { matchId: '#M1021', matchName: 'MLBB 全国公开赛 S4', game: 'MLBB', result: '亚军', date: '2026-06-10' },
+      { matchId: '#M1018', matchName: 'MLBB 全国公开赛 S3', game: 'MLBB', result: '季军', date: '2026-05-28' },
+      { matchId: '#M1015', matchName: 'Gainslink MLBB 月赛', game: 'MLBB', result: '冠军', date: '2026-04-20' },
+    ],
+  },
+  {
+    id: 'T-0005', name: 'Dark Matter', game: 'Dota 2', region: '菲律宾',
+    captainId: 'U-4456', captainName: 'CryptoKing', memberCount: 5, matchCount: 3,
+    status: 'disabled', createdAt: '2026-02-14',
+    description: '因多次违规行为已被禁用。',
+    members: [
+      { userId: 'U-4456', nickname: 'CryptoKing', role: 'captain', joinedAt: '2026-02-14' },
+      { userId: 'U-9988', nickname: 'SpeedDemon', role: 'member', joinedAt: '2026-02-15' },
+      { userId: 'U-1234', nickname: 'IronFist', role: 'member', joinedAt: '2026-02-16' },
+      { userId: 'U-5678', nickname: 'LightYear', role: 'member', joinedAt: '2026-02-20' },
+      { userId: 'U-9012', nickname: 'DarkRift', role: 'member', joinedAt: '2026-02-25' },
+    ],
+    recentMatches: [
+      { matchId: '#M1007', matchName: 'Dota 2 新人杯', game: 'Dota 2', result: '淘汰', date: '2026-03-05' },
+    ],
+  },
+  {
+    id: 'T-0006', name: 'Crimson Hawks', game: 'eFootball', region: '马来西亚',
+    captainId: 'U-7741', captainName: 'KickMaster', memberCount: 3, matchCount: 7,
+    status: 'active', createdAt: '2026-03-01',
+    members: [
+      { userId: 'U-7741', nickname: 'KickMaster', role: 'captain', joinedAt: '2026-03-01' },
+      { userId: 'U-3355', nickname: 'GoalSeeker', role: 'member', joinedAt: '2026-03-03' },
+      { userId: 'U-8866', nickname: 'NetBreaker', role: 'member', joinedAt: '2026-03-05' },
+    ],
+    recentMatches: [
+      { matchId: '#M1019', matchName: 'eFootball 东南亚邀请赛', game: 'eFootball', result: '冠军', date: '2026-05-25' },
+      { matchId: '#M1013', matchName: 'Gainslink eFootball 月赛', game: 'eFootball', result: '亚军', date: '2026-04-10' },
+    ],
+  },
+  {
+    id: 'T-0007', name: 'Iron Curtain', game: 'MLBB', region: '菲律宾',
+    captainId: 'U-2298', captainName: 'IronWill', memberCount: 5, matchCount: 2,
+    status: 'active', createdAt: '2026-05-20',
+    members: [
+      { userId: 'U-2298', nickname: 'IronWill', role: 'captain', joinedAt: '2026-05-20' },
+      { userId: 'U-6612', nickname: 'SteelEdge', role: 'member', joinedAt: '2026-05-21' },
+      { userId: 'U-4490', nickname: 'RockSolid', role: 'member', joinedAt: '2026-05-22' },
+      { userId: 'U-1187', nickname: 'TitanFist', role: 'member', joinedAt: '2026-05-23' },
+      { userId: 'U-8823', nickname: 'BoulderRush', role: 'member', joinedAt: '2026-05-25' },
+    ],
+    recentMatches: [
+      { matchId: '#M1021', matchName: 'MLBB 全国公开赛 S4', game: 'MLBB', result: '淘汰', date: '2026-06-10' },
+    ],
+  },
+  {
+    id: 'T-0008', name: 'Velocity', game: 'PUBG', region: '越南',
+    captainId: 'U-5512', captainName: 'SpeedForce', memberCount: 4, matchCount: 11,
+    status: 'active', createdAt: '2025-10-30',
+    members: [
+      { userId: 'U-5512', nickname: 'SpeedForce', role: 'captain', joinedAt: '2025-10-30' },
+      { userId: 'U-3344', nickname: 'TurboBoost', role: 'member', joinedAt: '2025-11-01' },
+      { userId: 'U-7723', nickname: 'QuickDraw', role: 'member', joinedAt: '2025-11-05' },
+      { userId: 'U-9945', nickname: 'SwiftStrike', role: 'member', joinedAt: '2025-11-10' },
+    ],
+    recentMatches: [
+      { matchId: '#M1020', matchName: 'PUBG 东南亚公开赛', game: 'PUBG', result: '晋级', date: '2026-06-01' },
+      { matchId: '#M1016', matchName: 'Gainslink PUBG 月赛', game: 'PUBG', result: '冠军', date: '2026-04-28' },
+      { matchId: '#M1012', matchName: 'PUBG 新人杯', game: 'PUBG', result: '季军', date: '2026-03-15' },
+    ],
+  },
 ];
 

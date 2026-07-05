@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -51,6 +51,7 @@ const stageTypeOptions: { value: TournamentStage['type']; label: string }[] = [
   { value: 'SINGLE_ELIMINATION', label: '单败淘汰赛' },
   { value: 'DOUBLE_ELIMINATION', label: '双败淘汰赛' },
   { value: 'SWISS', label: '瑞士轮' },
+  { value: 'FREE', label: '自由排布' },
 ];
 
 const templateCards = [
@@ -85,6 +86,9 @@ const emptyDraft: Partial<MatchItem> = {
 export default function MatchCreateFlow({ onSave, onCancel }: MatchCreateFlowProps) {
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<Partial<MatchItem>>(emptyDraft);
+  // 稳定的草稿 ID，整个创建流程共用一个，避免多次保存产生重复条目
+  const draftIdRef = useRef(`#M${Math.floor(1000 + Math.random() * 9000)}`);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
 
   const [previewRounds, setPreviewRounds] = useState<MatchRound[]>([]);
 
@@ -144,7 +148,8 @@ export default function MatchCreateFlow({ onSave, onCancel }: MatchCreateFlowPro
 
   const buildMatch = (publish: boolean): MatchItem => {
     const now = new Date().toISOString().slice(0, 10);
-    const id = `#M${Math.floor(1000 + Math.random() * 9000)}`;
+    // 发布时生成新 ID；草稿保存复用 draftIdRef 避免重复
+    const id = publish ? `#M${Math.floor(1000 + Math.random() * 9000)}` : draftIdRef.current;
     // safe defaults so the detail view never crashes on undefined fields
     const defaults: Partial<MatchItem> = {
       game: games[0],
@@ -185,8 +190,11 @@ export default function MatchCreateFlow({ onSave, onCancel }: MatchCreateFlowPro
   };
 
   const handleSaveDraft = () => {
-    if (!draft.name?.trim()) return;
-    onSave(buildMatch(false), false);
+    // 允许随时保存草稿，名称为空时自动生成占位名
+    const autoName = draft.name?.trim() || `草稿 ${new Date().toLocaleDateString('zh-CN')}`;
+    const m = { ...buildMatch(false), name: autoName };
+    onSave(m, false);
+    setLastSavedTime(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
   };
 
   return (
@@ -238,11 +246,10 @@ export default function MatchCreateFlow({ onSave, onCancel }: MatchCreateFlowPro
           <div className="flex items-center gap-3">
             <button
               onClick={handleSaveDraft}
-              disabled={!draft.name?.trim()}
-              className="flex items-center gap-1 text-xs px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-40"
+              className="flex items-center gap-1 text-xs px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50"
             >
               <Save size={13} />
-              保存草稿
+              {lastSavedTime ? `已保存 ${lastSavedTime}` : '保存草稿'}
             </button>
             <button
               onClick={() => setStep((s) => Math.min(3, s + 1))}
@@ -665,6 +672,11 @@ function Step2({
         <div className="mt-4 bg-slate-50 rounded-xl p-4 min-h-[420px]">
           {!activeStage ? (
             <div className="text-sm text-slate-400">请选择或添加阶段</div>
+          ) : activeStage.type === 'FREE' ? (
+            <div className="text-sm text-slate-400 text-center pt-20">
+              自由排布阶段不提供对阵预览<br />
+              <span className="text-xs">可在比赛管理中手动创建任意对阵</span>
+            </div>
           ) : previewRounds.length === 0 ? (
             <div className="text-sm text-slate-400 text-center pt-20">
               配置完成后点击右上角「生成对阵图」预览
@@ -952,7 +964,10 @@ function Step3({
         <div className="mt-4 text-sm text-slate-600 space-y-1">
           {stages.map((stage, index) => (
             <div key={stage.stageId}>
-              阶段 {index + 1}（{stage.name}）：{stage.teamsIn} 队进 → {stage.teamsOut} 队出 · {stageTypeOptions.find((o) => o.value === stage.type)?.label} · 默认 {stage.defaultFormat}
+              阶段 {index + 1}（{stage.name}）：
+              {stage.type === 'FREE'
+                ? `自由排布${stage.entrant.entrantCount ? ` · ${stage.entrant.entrantCount} 队参赛` : ''}${Array.isArray(stage.advancement) && stage.advancement[0]?.totalCount ? ` · ${stage.advancement[0].totalCount} 队晋出` : ''}`
+                : `${stage.teamsIn} 队进 → ${stage.teamsOut} 队出 · ${stageTypeOptions.find((o) => o.value === stage.type)?.label} · 默认 ${stage.defaultFormat}`}
             </div>
           ))}
           {previewRounds.map((round) => (

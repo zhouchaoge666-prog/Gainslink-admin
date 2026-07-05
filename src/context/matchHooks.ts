@@ -83,6 +83,18 @@ export function useMatchActions() {
     dispatch({ type: 'ADD_EXTRA_ROUND', payload: { stageId, groupIndex, teamA, teamB, format } });
   }, [dispatch]);
 
+  const addFreeGame = useCallback((stageId: string, teamA: string, teamB: string, format?: string, roundName?: string) => {
+    dispatch({ type: 'ADD_FREE_GAME', payload: { stageId, teamA, teamB, format, roundName } });
+  }, [dispatch]);
+
+  const deleteFreeRound = useCallback((roundId: string) => {
+    dispatch({ type: 'DELETE_FREE_ROUND', payload: { roundId } });
+  }, [dispatch]);
+
+  const updateStageMeta = useCallback((stageId: string, scoring: { winPoints: number; drawPoints: number; lossPoints: number }) => {
+    dispatch({ type: 'UPDATE_STAGE_META', payload: { stageId, scoring } });
+  }, [dispatch]);
+
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     dispatch({ type: 'SHOW_TOAST', payload: { message, type } });
   }, [dispatch]);
@@ -108,6 +120,9 @@ export function useMatchActions() {
     clearGroupSlot,
     advanceTeams,
     addExtraRound,
+    addFreeGame,
+    deleteFreeRound,
+    updateStageMeta,
     showToast,
     hideToast,
   };

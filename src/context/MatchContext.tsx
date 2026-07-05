@@ -9,19 +9,22 @@ function matchReducer(state: MatchState, action: MatchAction): MatchState {
   switch (action.type) {
     case 'LOAD_MATCH': {
       const { match, approvedTeams } = action.payload;
+      // 读取已持久化的 stages（含用户修改过的积分规则等）
+      const savedStages = storage.getStages(match.id);
+      const effectiveMatch = savedStages ? { ...match, stages: savedStages } : match;
       const saved = storage.getRounds(match.id);
       // 始终用新生成的 rounds 提供正确的路由链路（loserNextMatchId 等），
       // 再将 saved 的比分/队伍叠加回去，最后重放所有已完成场次的胜负传播，
       // 修复旧存档因路由 bug 导致 LB 队伍缺失/错位的问题。
       let rounds;
-      if (match.stages) {
-        const fresh = generateMatchRounds(match, match.stages);
+      if (effectiveMatch.stages) {
+        const fresh = generateMatchRounds(effectiveMatch, effectiveMatch.stages);
         rounds = saved ? repropagateAllRoutes(mergeRoundData(fresh, saved)) : fresh;
       } else {
         rounds = saved ?? [];
       }
       const advancedTeams = storage.getAdvancedTeams(match.id);
-      return { ...state, match, rounds, approvedTeams, advancedTeams, toast: null };
+      return { ...state, match: effectiveMatch, rounds, approvedTeams, advancedTeams, toast: null };
     }
     case 'UPDATE_MATCH': {
       const match = action.payload;
@@ -34,6 +37,24 @@ function matchReducer(state: MatchState, action: MatchAction): MatchState {
       const rounds = generateMatchRounds(match, match.stages);
       return { ...state, match, rounds };
     }
+    case 'UPDATE_STAGE_META': {
+      if (!state.match?.stages) return state;
+      const { stageId, scoring } = action.payload;
+      const newStages = state.match.stages.map((s) => {
+        if (s.stageId !== stageId) return s;
+        const newScoring = {
+          ...s.scoring,
+          winPoints: scoring.winPoints,
+          drawPoints: scoring.drawPoints,
+          lossPoints: scoring.lossPoints,
+          forfeitWinPoints: s.scoring?.forfeitWinPoints ?? 3,
+          forfeitLossPoints: s.scoring?.forfeitLossPoints ?? 0,
+        };
+        const newConfig = { ...s.config, winPoints: scoring.winPoints, drawPoints: scoring.drawPoints, lossPoints: scoring.lossPoints };
+        return { ...s, scoring: newScoring, config: newConfig };
+      });
+      return { ...state, match: { ...state.match, stages: newStages } };
+    }
     case 'SET_APPROVED_TEAMS':
       return { ...state, approvedTeams: action.payload };
     case 'SET_ROUNDS':
@@ -42,6 +63,8 @@ function matchReducer(state: MatchState, action: MatchAction): MatchState {
       const { roundId, gameId, side, teamName } = action.payload;
       // 找到目标轮次所属 stageId，用于将同一阶段的旧位置自动清空（移动语义）
       const targetStageId = state.rounds.find((r) => r.roundId === roundId)?.stageId;
+      // 移动语义：最多只从旧位置清除一个同名槽，避免同名队伍互相误清
+      let clearedCount = 0;
       const clearedRounds = state.rounds.map((round) => {
         // 只在同一阶段内查找旧位置
         if (targetStageId && round.stageId !== targetStageId) return round;
@@ -49,16 +72,18 @@ function matchReducer(state: MatchState, action: MatchAction): MatchState {
           ...round,
           matches: round.matches.map((game) => {
             if (game.gameId === gameId) return game; // 目标 game 留给下面处理
+            if (clearedCount >= 1) return game; // 已清除一个，不再继续
             let g = { ...game };
             if (g.teamA === teamName && !g.teamAIsPlaceholder) {
               g = { ...g, teamA: g.slotA || '待定', teamAIsPlaceholder: true };
               if (g.status === 'completed' || g.winner !== undefined)
                 g = { ...g, status: 'scheduled', scoreA: undefined, scoreB: undefined, winner: undefined };
-            }
-            if (g.teamB === teamName && !g.teamBIsPlaceholder) {
+              clearedCount++;
+            } else if (g.teamB === teamName && !g.teamBIsPlaceholder) {
               g = { ...g, teamB: g.slotB || '待定', teamBIsPlaceholder: true };
               if (g.status === 'completed' || g.winner !== undefined)
                 g = { ...g, status: 'scheduled', scoreA: undefined, scoreB: undefined, winner: undefined };
+              clearedCount++;
             }
             return g;
           }),
@@ -353,6 +378,8 @@ function matchReducer(state: MatchState, action: MatchAction): MatchState {
         const slotToTeam = new Map<string, string>();
         const groupSlots = new Map<number, string[]>();
         const groupSlotSeen = new Map<number, Set<string>>();
+        // 每组最多收集 teamsPerGroup 个 slot，防止旧数据或多余 round 导致某组槽位过多
+        const maxSlotsPerGroup = stage.group.enabled ? stage.group.teamsPerGroup : Infinity;
 
         state.rounds
           .filter((r) => r.stageId === stageId)
@@ -361,10 +388,10 @@ function matchReducer(state: MatchState, action: MatchAction): MatchState {
             const gi = r.groupIndex ?? 0;
             if (!groupSlots.has(gi)) { groupSlots.set(gi, []); groupSlotSeen.set(gi, new Set()); }
             r.matches.forEach((g) => {
-              if (g.slotA && g.slotA !== 'BYE' && !groupSlotSeen.get(gi)!.has(g.slotA)) {
+              if (g.slotA && g.slotA !== 'BYE' && !groupSlotSeen.get(gi)!.has(g.slotA) && groupSlots.get(gi)!.length < maxSlotsPerGroup) {
                 groupSlots.get(gi)!.push(g.slotA); groupSlotSeen.get(gi)!.add(g.slotA);
               }
-              if (g.slotB && g.slotB !== 'BYE' && !groupSlotSeen.get(gi)!.has(g.slotB)) {
+              if (g.slotB && g.slotB !== 'BYE' && !groupSlotSeen.get(gi)!.has(g.slotB) && groupSlots.get(gi)!.length < maxSlotsPerGroup) {
                 groupSlots.get(gi)!.push(g.slotB); groupSlotSeen.get(gi)!.add(g.slotB);
               }
             });
@@ -485,6 +512,45 @@ function matchReducer(state: MatchState, action: MatchAction): MatchState {
       };
       return { ...state, rounds: [...state.rounds, newRound] };
     }
+    case 'ADD_FREE_GAME': {
+      if (!state.match) return state;
+      const { stageId, teamA, teamB, format, roundName } = action.payload;
+      const stage = state.match.stages?.find((s) => s.stageId === stageId);
+      if (!stage) return state;
+      const stageRounds = state.rounds.filter((r) => r.stageId === stageId);
+      const maxRoundNumber = stageRounds.reduce((m, r) => Math.max(m, r.roundNumber), 0);
+      const ts = Date.now();
+      const newRoundId = `${state.match.id}-${stageId}-free-${ts}`;
+      const newRound = {
+        roundId: newRoundId,
+        matchId: state.match.id,
+        roundName: roundName || `${teamA} vs ${teamB}`,
+        roundNumber: maxRoundNumber + 1,
+        stage: 'group' as const,
+        stageId,
+        stageType: 'FREE' as const,
+        startTime: '',
+        endTime: '',
+        status: 'upcoming' as const,
+        matches: [{
+          gameId: `${newRoundId}-G1`,
+          matchId: state.match.id,
+          teamA: teamA || '待定',
+          teamB: teamB || '待定',
+          teamAIsPlaceholder: !teamA,
+          teamBIsPlaceholder: !teamB,
+          slotA: teamA || '待定',
+          slotB: teamB || '待定',
+          status: 'scheduled' as const,
+          format: format || stage.defaultFormat || 'BO1',
+          startTime: '',
+        }],
+      };
+      return { ...state, rounds: [...state.rounds, newRound] };
+    }
+    case 'DELETE_FREE_ROUND': {
+      return { ...state, rounds: state.rounds.filter((r) => r.roundId !== action.payload.roundId) };
+    }
     case 'SHOW_TOAST':
       return { ...state, toast: action.payload };
     case 'HIDE_TOAST':
@@ -497,9 +563,27 @@ function matchReducer(state: MatchState, action: MatchAction): MatchState {
 export function MatchProvider({ children, initialMatch, initialTeams }: { children: ReactNode; initialMatch?: MatchItem; initialTeams?: TeamPoolItem[] }) {
   const [state, dispatch] = useReducer(matchReducer, {
     match: initialMatch || null,
-    rounds: initialMatch
-      ? (storage.getRounds(initialMatch.id) ?? (initialMatch.stages ? generateMatchRounds(initialMatch, initialMatch.stages) : []))
-      : [],
+    rounds: (() => {
+      if (!initialMatch) return [];
+      const saved = storage.getRounds(initialMatch.id);
+      if (initialMatch.stages) {
+        const fresh = generateMatchRounds(initialMatch, initialMatch.stages);
+        if (!saved) return fresh;
+        // mergeRoundData 现已过滤无效队伍字段，但仍额外 sanitize 确保 teamA/teamB 非空
+        const merged = mergeRoundData(fresh, saved).map((round) => ({
+          ...round,
+          matches: round.matches.map((game) => ({
+            ...game,
+            teamA: game.teamA || game.slotA || '待定',
+            teamB: game.teamB || game.slotB || '待定',
+            teamAIsPlaceholder: !game.teamA ? true : game.teamAIsPlaceholder,
+            teamBIsPlaceholder: !game.teamB ? true : game.teamBIsPlaceholder,
+          })),
+        }));
+        return repropagateAllRoutes(merged);
+      }
+      return saved ?? [];
+    })(),
     approvedTeams: initialTeams || [],
     advancedTeams: initialMatch ? storage.getAdvancedTeams(initialMatch.id) : {},
     toast: null,
@@ -514,18 +598,30 @@ export function MatchProvider({ children, initialMatch, initialTeams }: { childr
     }
   }, [initialMatch, initialTeams, state.match]);
 
-  // 每次 rounds / advancedTeams 变化时持久化到 localStorage
+  // 每次 rounds / advancedTeams / stages 变化时持久化到 localStorage（防抖 400ms，避免频繁操作时连续写入）
   useEffect(() => {
-    if (state.match && state.rounds.length > 0) {
-      storage.saveRounds(state.match.id, state.rounds);
-    }
+    if (!state.match || state.rounds.length === 0) return;
+    const id = setTimeout(() => {
+      storage.saveRounds(state.match!.id, state.rounds);
+    }, 400);
+    return () => clearTimeout(id);
   }, [state.match, state.rounds]);
 
   useEffect(() => {
-    if (state.match) {
-      storage.saveAdvancedTeams(state.match.id, state.advancedTeams);
-    }
+    if (!state.match) return;
+    const id = setTimeout(() => {
+      storage.saveAdvancedTeams(state.match!.id, state.advancedTeams);
+    }, 400);
+    return () => clearTimeout(id);
   }, [state.match, state.advancedTeams]);
+
+  useEffect(() => {
+    if (!state.match?.stages) return;
+    const id = setTimeout(() => {
+      storage.saveStages(state.match!.id, state.match!.stages!);
+    }, 400);
+    return () => clearTimeout(id);
+  }, [state.match?.stages]);
 
   return <MatchContext.Provider value={{ state, dispatch }}>{children}</MatchContext.Provider>;
 }

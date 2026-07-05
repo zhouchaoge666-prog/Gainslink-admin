@@ -1,210 +1,202 @@
-import { X, Crown, Users, Clock, Trophy, MapPin, Calendar } from 'lucide-react';
-import { getTeamByName } from '../../data/mockData';
+import { X, Users, Trophy, MapPin, CalendarDays, Crown } from 'lucide-react';
+import { teamListData } from '../../data/mockData';
+import type { TeamItem } from '../../data/mockData';
 
 interface TeamDrawerProps {
   teamName: string;
   onClose: () => void;
 }
 
-const roleBadge: Record<string, { label: string; cls: string }> = {
-  captain:    { label: '队长', cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
-  member:     { label: '成员', cls: 'bg-slate-50 text-slate-600 border border-slate-200' },
-  substitute: { label: '候补', cls: 'bg-blue-50 text-blue-600 border border-blue-200' },
+// ── 游戏色点 ──────────────────────────────────────────────────────────────────
+const gameColors: Record<string, string> = {
+  'MLBB':      'bg-blue-500',
+  'Dota 2':    'bg-red-500',
+  'PUBG':      'bg-amber-500',
+  'eFootball': 'bg-emerald-500',
 };
-
-const resultBadge: Record<string, { label: string; cls: string }> = {
-  '晋级':  { label: '晋级', cls: 'bg-emerald-50 text-emerald-700' },
-  '淘汰':  { label: '淘汰', cls: 'bg-slate-100 text-slate-500' },
-  '进行中':{ label: '进行中', cls: 'bg-blue-50 text-blue-600' },
-};
-
-const actionColor: Record<string, string> = {
-  '加入战队':    'text-emerald-600',
-  '离开战队':    'text-red-500',
-  '变更队长':    'text-amber-600',
-  '战队名称变更':'text-violet-600',
-  '参赛报名':    'text-primary',
-  '资格取消':    'text-red-500',
-};
-
-function stringToColor(str: string): string {
-  const colors = [
-    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-    '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
-  ];
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
+function GameBadge({ game }: { game: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+      <span className={`w-1.5 h-1.5 rounded-full ${gameColors[game] || 'bg-slate-400'}`} />
+      {game}
+    </span>
+  );
 }
 
+// ── 状态 Badge ────────────────────────────────────────────────────────────────
+function StatusBadge({ status }: { status: TeamItem['status'] }) {
+  return status === 'active' ? (
+    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-medium">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />正常
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 font-medium">
+      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />已禁用
+    </span>
+  );
+}
+
+// ── 比赛结果 Badge ────────────────────────────────────────────────────────────
+function ResultBadge({ result }: { result: string }) {
+  const map: Record<string, string> = {
+    冠军: 'bg-amber-50 text-amber-700',
+    亚军: 'bg-slate-100 text-slate-700',
+    季军: 'bg-orange-50 text-orange-700',
+    晋级: 'bg-blue-50 text-blue-700',
+    淘汰: 'bg-slate-50 text-slate-400',
+    参赛: 'bg-indigo-50 text-indigo-600',
+  };
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[result] || 'bg-slate-100 text-slate-600'}`}>
+      {result}
+    </span>
+  );
+}
+
+// ── 战队 Logo ─────────────────────────────────────────────────────────────────
+function TeamLogo({ name, size = 40 }: { name: string; size?: number }) {
+  const colors = [
+    'bg-blue-100 text-blue-700', 'bg-purple-100 text-purple-700',
+    'bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-700',
+    'bg-rose-100 text-rose-700', 'bg-indigo-100 text-indigo-700',
+  ];
+  const idx = name.charCodeAt(0) % colors.length;
+  return (
+    <div
+      className={`rounded-lg flex items-center justify-center font-bold ${colors[idx]}`}
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
+    >
+      {name.slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
+
+// ── 无数据占位 ────────────────────────────────────────────────────────────────
+function NoDataPanel({ teamName, onClose }: { teamName: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex">
+      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
+      <div className="relative ml-auto h-full w-[440px] bg-white shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <TeamLogo name={teamName} size={40} />
+            <div className="font-semibold text-slate-800">{teamName}</div>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
+          该战队尚无系统档案记录
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 主抽屉 ────────────────────────────────────────────────────────────────────
 export default function TeamDrawer({ teamName, onClose }: TeamDrawerProps) {
-  const team = getTeamByName(teamName);
+  const team = teamListData.find((t) => t.name === teamName) ?? null;
+
+  if (!team) return <NoDataPanel teamName={teamName} onClose={onClose} />;
 
   return (
     <div className="fixed inset-0 z-[60] flex">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/20" onClick={onClose} />
+      <div className="relative ml-auto h-full w-[440px] bg-white shadow-2xl flex flex-col">
 
-      <div className="relative ml-auto h-full w-full max-w-md bg-white shadow-2xl flex flex-col">
-        {/* Header */}
-        <div className="h-14 border-b border-slate-200 flex items-center justify-between px-5 shrink-0">
-          <div className="flex items-center gap-2">
-            <Users size={16} className="text-slate-500" />
-            <span className="font-medium text-slate-800">战队详情</span>
+        {/* 头部 */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <TeamLogo name={team.name} size={40} />
+            <div>
+              <div className="font-semibold text-slate-800">{team.name}</div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <GameBadge game={team.game} />
+                <StatusBadge status={team.status} />
+              </div>
+            </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg">
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
             <X size={18} />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {!team ? (
-            /* ── 无 mock 数据时的占位面板 ── */
-            <div className="p-5 space-y-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg font-bold shrink-0"
-                  style={{ backgroundColor: stringToColor(teamName) }}
-                >
-                  {teamName.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <div className="text-base font-bold text-slate-800">{teamName}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">暂无详细信息</div>
-                </div>
+          {/* 基本信息 */}
+          <div className="px-5 py-4 border-b border-slate-100 space-y-3">
+            <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">基本信息</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <MapPin size={14} className="text-slate-400" />
+                {team.region}
               </div>
-              <div className="flex items-center justify-center py-10 text-slate-400 text-sm">
-                该战队尚无系统档案记录
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <CalendarDays size={14} className="text-slate-400" />
+                {team.createdAt} 创建
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <Users size={14} className="text-slate-400" />
+                {team.memberCount} 名成员
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <Trophy size={14} className="text-slate-400" />
+                参赛 {team.matchCount} 次
               </div>
             </div>
-          ) : (
-            <div className="p-5 space-y-5">
-              {/* ── 基本信息 ── */}
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg font-bold shrink-0"
-                  style={{ backgroundColor: stringToColor(team.teamName) }}
-                >
-                  {team.teamName.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-base font-bold text-slate-800 truncate">{team.teamName}</div>
-                  <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5 flex-wrap">
-                    <span className="flex items-center gap-1">
-                      <Crown size={11} className="text-amber-500" />
-                      {team.captainNickname}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin size={11} />
-                      {team.country}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar size={11} />
-                      {team.createdAt}
-                    </span>
-                  </div>
-                </div>
-              </div>
+          </div>
 
-              {/* ── 成员列表 ── */}
-              <section>
-                <div className="flex items-center gap-2 mb-2">
-                  <Users size={13} className="text-slate-400" />
-                  <span className="text-xs font-semibold text-slate-700">成员 ({team.members.length})</span>
-                </div>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  {team.members.map((m, i) => {
-                    const badge = roleBadge[m.role];
-                    return (
-                      <div
-                        key={m.userId}
-                        className={`flex items-center gap-3 px-3 py-2.5 ${i < team.members.length - 1 ? 'border-b border-slate-100' : ''}`}
-                      >
-                        <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ backgroundColor: stringToColor(m.nickname) }}
-                        >
-                          {m.nickname.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-slate-800 truncate">{m.nickname}</div>
-                          <div className="text-xs text-slate-400">{m.userId}</div>
-                        </div>
-                        <div className="flex flex-col items-end gap-0.5 shrink-0">
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${badge.cls}`}>
-                            {badge.label}
-                          </span>
-                          <span className="text-[10px] text-slate-400">{m.joinedAt}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-
-              {/* ── 参赛历史 ── */}
-              {team.matchHistory.length > 0 && (
-                <section>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Trophy size={13} className="text-slate-400" />
-                    <span className="text-xs font-semibold text-slate-700">参赛历史</span>
-                  </div>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                    {team.matchHistory.map((h, i) => {
-                      const rb = resultBadge[h.result] ?? { label: h.result, cls: 'bg-slate-100 text-slate-500' };
-                      return (
-                        <div
-                          key={i}
-                          className={`flex items-center gap-3 px-3 py-2.5 ${i < team.matchHistory.length - 1 ? 'border-b border-slate-100' : ''}`}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm text-slate-700 truncate">{h.matchName}</div>
-                            <div className="text-xs text-slate-400">{h.stage}</div>
-                          </div>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${rb.cls}`}>{rb.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
-
-              {/* ── 变更记录 ── */}
-              {team.changeLog.length > 0 && (
-                <section>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock size={13} className="text-slate-400" />
-                    <span className="text-xs font-semibold text-slate-700">变更记录</span>
-                  </div>
-                  <div className="space-y-0 relative">
-                    {/* 竖线 */}
-                    <div className="absolute left-[19px] top-3 bottom-3 w-px bg-slate-200" />
-                    {team.changeLog.map((log) => {
-                      const dotColor = actionColor[log.action] ?? 'text-slate-400';
-                      return (
-                        <div key={log.id} className="flex gap-3 pb-3 relative">
-                          <div className={`w-10 h-10 shrink-0 flex items-center justify-center`}>
-                            <div className={`w-2 h-2 rounded-full bg-current ${dotColor} mt-1`} />
-                          </div>
-                          <div className="flex-1 pt-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`text-xs font-semibold ${dotColor}`}>{log.action}</span>
-                              <span className="text-xs text-slate-700 font-medium">{log.target}</span>
-                            </div>
-                            <div className="text-xs text-slate-400 mt-0.5">
-                              {log.date} · 由 {log.operator} 操作
-                            </div>
-                            {log.remark && (
-                              <div className="text-xs text-slate-500 bg-slate-50 rounded px-2 py-1 mt-1">{log.remark}</div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
+          {/* 成员列表 */}
+          <div className="px-5 py-4 border-b border-slate-100">
+            <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+              成员列表
             </div>
-          )}
+            <div className="space-y-2">
+              {team.members.map((m) => (
+                <div key={m.userId} className="flex items-center justify-between py-1.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                      {m.nickname.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-sm text-slate-700 font-medium">{m.nickname}</div>
+                      <div className="text-[10px] text-slate-400">{m.userId}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {m.role === 'captain' && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-medium">
+                        <Crown size={9} />队长
+                      </span>
+                    )}
+                    <span className="text-[10px] text-slate-400">{m.joinedAt}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 近期参赛记录 */}
+          <div className="px-5 py-4">
+            <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+              近期参赛记录
+            </div>
+            {team.recentMatches.length === 0 ? (
+              <div className="text-sm text-slate-400">暂无参赛记录</div>
+            ) : (
+              <div className="space-y-2.5">
+                {team.recentMatches.map((m) => (
+                  <div key={m.matchId} className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm text-slate-700">{m.matchName}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">{m.matchId} · {m.date}</div>
+                    </div>
+                    <ResultBadge result={m.result} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -74,8 +74,8 @@ export default function MatchEditorModal({
       status: autoStatus,
       format,
       startTime: startTime ? fromInput(startTime) : undefined,
-      teamAIsPlaceholder: false,
-      teamBIsPlaceholder: false,
+      teamAIsPlaceholder: isFlipped ? game.teamAIsPlaceholder : !teamA,
+      teamBIsPlaceholder: isFlipped ? game.teamBIsPlaceholder : !teamB,
       replayUrl: replayUrl.trim() || undefined,
     };
     onSave(round.roundId, game.gameId, updates, autoWinner || undefined);

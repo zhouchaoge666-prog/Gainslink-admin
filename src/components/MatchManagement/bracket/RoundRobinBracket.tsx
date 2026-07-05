@@ -32,6 +32,7 @@ export default function RoundRobinBracket({
   onTeamClick,
 }: RoundRobinBracketProps) {
   const [editGame, setEditGame] = useState<{ round: MatchRound; game: MatchGame; forcedTeamA?: string; forcedTeamB?: string } | null>(null);
+  const [activeGroupLabel, setActiveGroupLabel] = useState<string | null>(null);
 
   const groups = useMemo(() => {
     const map = new Map<string, MatchRound[]>();
@@ -53,14 +54,39 @@ export default function RoundRobinBracket({
     }));
   }, [rounds]);
 
+  // default to first group when groups change
+  const effectiveActiveLabel = (activeGroupLabel && groups.some(g => g.label === activeGroupLabel))
+    ? activeGroupLabel
+    : groups[0]?.label ?? null;
+
+  const activeGroup = groups.find(g => g.label === effectiveActiveLabel);
+
   return (
-    <div className="space-y-8">
-      {groups.map(({ label, rounds: groupRounds, teams }) => (
+    <div className="space-y-4">
+      {groups.length > 1 && (
+        <div className="flex items-center overflow-x-auto border-b border-slate-200">
+          {groups.map(({ label }) => (
+            <button
+              key={label}
+              onClick={() => setActiveGroupLabel(label)}
+              className={`text-sm px-4 py-2.5 whitespace-nowrap transition-colors shrink-0 ${
+                label === effectiveActiveLabel
+                  ? 'text-primary border-b-2 border-primary font-medium'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeGroup && (
         <GroupSection
-          key={label}
-          label={label}
-          groupRounds={groupRounds}
-          teams={teams}
+          key={activeGroup.label}
+          label={activeGroup.label}
+          groupRounds={activeGroup.rounds}
+          teams={activeGroup.teams}
           availableTeams={availableTeams}
           onEdit={(round, game, forcedTeamA, forcedTeamB) => setEditGame({ round, game, forcedTeamA, forcedTeamB })}
           onUpdateGame={onUpdateGame}
@@ -72,7 +98,7 @@ export default function RoundRobinBracket({
           lossPoints={lossPoints}
           onTeamClick={onTeamClick}
         />
-      ))}
+      )}
 
       {editGame && (
         <MatchEditorModal
@@ -748,6 +774,7 @@ function rankTextColor(rank: number): string {
 }
 
 function formatDate(startTime: string): string {
+  if (!startTime) return '';
   const m = startTime.match(/(\d{2})-(\d{2})/);
   return m ? `${m[1]}-${m[2]}` : '';
 }

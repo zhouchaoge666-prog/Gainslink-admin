@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { LayoutDashboard, Trophy, Users, LogOut, HelpCircle, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, Trophy, Users, LogOut, HelpCircle, ChevronDown, Shield } from 'lucide-react';
 
-export type MenuKey = 'overview' | 'match-dashboard' | 'match-list' | 'match-organizer' | 'user-mgmt';
+export type MenuKey = 'overview' | 'match-dashboard' | 'match-list' | 'match-organizer' | 'user-mgmt' | 'team-mgmt';
 
-const matchMgmtKeys: MenuKey[] = ['match-dashboard', 'match-list', 'match-organizer'];
+const matchMgmtKeys: MenuKey[] = ['match-dashboard', 'match-list', 'match-organizer', 'team-mgmt'];
 
 interface SidebarProps {
   active: MenuKey;
@@ -11,10 +11,22 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ active, onChange }: SidebarProps) {
-  const [dashboardOpen, setDashboardOpen] = useState(true);
   const [matchMgmtOpen, setMatchMgmtOpen] = useState(true);
 
   const isMatchMgmtActive = matchMgmtKeys.includes(active);
+
+  const subItem = (key: MenuKey, label: string) => (
+    <button
+      onClick={() => onChange(key)}
+      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+        active === key
+          ? 'bg-primary/20 text-white'
+          : 'text-slate-400 hover:text-slate-200 hover:bg-sidebar-hover'
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <aside className="w-52 bg-sidebar text-white flex flex-col flex-shrink-0">
@@ -23,40 +35,20 @@ export default function Sidebar({ active, onChange }: SidebarProps) {
       </div>
 
       <nav className="flex-1 py-4 px-3 space-y-1">
-        {/* 数据看板 - 可展开 */}
-        <div>
-          <button
-            onClick={() => setDashboardOpen(!dashboardOpen)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
-              active === 'overview'
-                ? 'bg-primary text-white'
-                : 'text-slate-400 hover:bg-sidebar-hover hover:text-slate-200'
-            }`}
-          >
-            <LayoutDashboard size={18} />
-            <span className="flex-1">数据看板</span>
-            <ChevronDown
-              size={14}
-              className={`transition-transform ${dashboardOpen ? 'rotate-180' : ''}`}
-            />
-          </button>
-          {dashboardOpen && (
-            <div className="mt-1 ml-6 space-y-0.5">
-              <button
-                onClick={() => onChange('overview')}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                  active === 'overview'
-                    ? 'bg-primary/20 text-white'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-sidebar-hover'
-                }`}
-              >
-                平台总览
-              </button>
-            </div>
-          )}
-        </div>
+        {/* 数据看板 — 平级直链 */}
+        <button
+          onClick={() => onChange('overview')}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+            active === 'overview'
+              ? 'bg-primary text-white'
+              : 'text-slate-400 hover:bg-sidebar-hover hover:text-slate-200'
+          }`}
+        >
+          <LayoutDashboard size={18} />
+          <span className="flex-1">数据看板</span>
+        </button>
 
-        {/* 赛事管理 - 可展开 */}
+        {/* 赛事管理 — 可展开，包含战队管理 */}
         <div>
           <button
             onClick={() => setMatchMgmtOpen(!matchMgmtOpen)}
@@ -75,36 +67,10 @@ export default function Sidebar({ active, onChange }: SidebarProps) {
           </button>
           {matchMgmtOpen && (
             <div className="mt-1 ml-6 space-y-0.5">
-              <button
-                onClick={() => onChange('match-dashboard')}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                  active === 'match-dashboard'
-                    ? 'bg-primary/20 text-white'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-sidebar-hover'
-                }`}
-              >
-                赛事运营看板
-              </button>
-              <button
-                onClick={() => onChange('match-list')}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                  active === 'match-list'
-                    ? 'bg-primary/20 text-white'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-sidebar-hover'
-                }`}
-              >
-                赛事管理
-              </button>
-              <button
-                onClick={() => onChange('match-organizer')}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                  active === 'match-organizer'
-                    ? 'bg-primary/20 text-white'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-sidebar-hover'
-                }`}
-              >
-                机构授权
-              </button>
+              {subItem('match-dashboard', '赛事运营看板')}
+              {subItem('match-list', '赛事管理')}
+              {subItem('match-organizer', '机构授权')}
+              {subItem('team-mgmt', '战队管理')}
             </div>
           )}
         </div>

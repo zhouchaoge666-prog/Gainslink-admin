@@ -4,7 +4,7 @@ import Sidebar, { type MenuKey } from './components/Sidebar';
 import PlatformOverview from './components/PlatformOverview';
 import MatchManagement from './components/MatchManagement';
 import UserManagement from './components/UserManagement';
-
+import TeamManagement from './components/TeamManagement';
 
 const pageTitles: Record<MenuKey, string> = {
   'overview': '平台总览',
@@ -12,6 +12,7 @@ const pageTitles: Record<MenuKey, string> = {
   'match-list': '赛事管理',
   'match-organizer': '机构授权',
   'user-mgmt': '用户管理',
+  'team-mgmt': '战队管理',
 };
 
 function App() {
@@ -62,6 +63,7 @@ function App() {
           />
         )}
         {activeMenu === 'user-mgmt' && <UserManagement />}
+        {activeMenu === 'team-mgmt' && <TeamManagement />}
       </main>
     </div>
   );
