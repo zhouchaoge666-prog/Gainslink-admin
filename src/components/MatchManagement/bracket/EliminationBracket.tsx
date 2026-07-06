@@ -12,11 +12,21 @@ interface EliminationBracketProps {
   onClearSlot?: (roundId: string, gameId: string, side: 'A' | 'B') => void;
   variant?: 'single' | 'double';
   onTeamClick?: (teamName: string) => void;
+  /** 预览模式：隐藏排期面板、不可交互 */
+  previewMode?: boolean;
 }
 
-const CARD_W = 188;
-const CARD_H = 82;  // 32+1+32+1+16 = team A + divider + team B + divider + time row
-const COL_GAP = 56;
+const CARD_W = 200;
+const CARD_H = 84;  // 33+1+33+1+16 = team A + divider + team B + divider + time row
+const COL_GAP = 64;
+
+// 分组主题色（每组各不相同）
+const GROUP_PALETTES = [
+  { border: 'border-blue-200', bg: 'bg-blue-50/40', accent: '#3b82f6', pill: 'bg-blue-100 text-blue-700' },
+  { border: 'border-violet-200', bg: 'bg-violet-50/40', accent: '#8b5cf6', pill: 'bg-violet-100 text-violet-700' },
+  { border: 'border-emerald-200', bg: 'bg-emerald-50/40', accent: '#10b981', pill: 'bg-emerald-100 text-emerald-700' },
+  { border: 'border-amber-200', bg: 'bg-amber-50/30', accent: '#f59e0b', pill: 'bg-amber-100 text-amber-700' },
+];
 // ROW_GAP = 28 (reserved for future use)
 
 // ─── 时间工具 ────────────────────────────────────────────────────────────────
@@ -38,6 +48,7 @@ export default function EliminationBracket({
   onClearSlot,
   variant = 'single',
   onTeamClick,
+  previewMode = false,
 }: EliminationBracketProps) {
   const [editGame, setEditGame] = useState<{ round: MatchRound; game: MatchGame } | null>(null);
 
@@ -88,13 +99,15 @@ export default function EliminationBracket({
 
   return (
     <div className="space-y-4">
-      {/* 场次排期面板（置顶，默认展开） */}
-      <StageSchedulePanel
-        rounds={rounds}
-        onUpdateGame={onUpdateGame}
-        onEdit={handleEdit}
-        defaultOpen
-      />
+      {/* 场次排期面板（置顶，默认展开）— 预览模式隐藏 */}
+      {!previewMode && (
+        <StageSchedulePanel
+          rounds={rounds}
+          onUpdateGame={onUpdateGame}
+          onEdit={handleEdit}
+          defaultOpen
+        />
+      )}
 
       {variant === 'double' ? (
         <>
@@ -132,7 +145,15 @@ export default function EliminationBracket({
           )}
         </>
       ) : (
-        <BracketTree rounds={[...rounds].sort((a, b) => a.roundNumber - b.roundNumber)} availableTeams={availableTeams} onDrop={handleDrop} onAssign={handleAssign} onClear={handleClear} onEdit={handleEdit} onTeamClick={onTeamClick} />
+        <MultiGroupBracket
+          rounds={rounds}
+          availableTeams={availableTeams}
+          onDrop={handleDrop}
+          onAssign={handleAssign}
+          onClear={handleClear}
+          onEdit={handleEdit}
+          onTeamClick={onTeamClick}
+        />
       )}
 
       {editGame && (
@@ -295,8 +316,8 @@ function StageSchedulePanel({
   );
 }
 
-// ─── 对阵树 ──────────────────────────────────────────────────────────────────
-function BracketTree({
+// ─── 多分组对阵（带折叠） ─────────────────────────────────────────────────────
+function MultiGroupBracket({
   rounds,
   availableTeams,
   onDrop,
@@ -313,6 +334,86 @@ function BracketTree({
   onEdit: (round: MatchRound, game: MatchGame) => void;
   onTeamClick?: (teamName: string) => void;
 }) {
+  const groupIndices = [...new Set(rounds.map((r) => r.groupIndex ?? 0))].sort((a, b) => a - b);
+
+  // 每组独立收起状态，默认全部展开
+  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
+  const toggle = (gi: number) => setCollapsed((prev) => ({ ...prev, [gi]: !prev[gi] }));
+
+  if (groupIndices.length <= 1) {
+    return (
+      <BracketTree
+        rounds={[...rounds].sort((a, b) => a.roundNumber - b.roundNumber)}
+        availableTeams={availableTeams}
+        onDrop={onDrop} onAssign={onAssign} onClear={onClear} onEdit={onEdit} onTeamClick={onTeamClick}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {groupIndices.map((gi) => {
+        const groupRounds = rounds.filter((r) => (r.groupIndex ?? 0) === gi);
+        const palette = GROUP_PALETTES[gi % GROUP_PALETTES.length];
+        const gameCount = groupRounds.reduce(
+          (n, r) => n + r.matches.filter((g) => !g.isThirdPlaceGame && g.slotA !== 'BYE').length, 0
+        );
+        const isCollapsed = !!collapsed[gi];
+        return (
+          <section key={gi} className={`border ${palette.border} ${palette.bg} rounded-xl overflow-hidden`}>
+            {/* 分组头部（可点击收起） */}
+            <button
+              onClick={() => toggle(gi)}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 bg-white/60 hover:bg-white/80 transition-colors ${
+                isCollapsed ? '' : `border-b ${palette.border}`
+              }`}
+            >
+              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${palette.pill}`}>
+                第 {gi + 1} 组
+              </span>
+              <span className="text-xs text-slate-400 flex-1 text-left">{gameCount} 场比赛</span>
+              {isCollapsed
+                ? <ChevronDown size={14} className="text-slate-400 shrink-0" />
+                : <ChevronUp size={14} className="text-slate-400 shrink-0" />
+              }
+            </button>
+            {!isCollapsed && (
+              <div className="p-4">
+                <BracketTree
+                  rounds={[...groupRounds].sort((a, b) => a.roundNumber - b.roundNumber)}
+                  availableTeams={availableTeams}
+                  onDrop={onDrop} onAssign={onAssign} onClear={onClear} onEdit={onEdit} onTeamClick={onTeamClick}
+                  accentColor={palette.accent}
+                />
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── 对阵树 ──────────────────────────────────────────────────────────────────
+function BracketTree({
+  rounds,
+  availableTeams,
+  onDrop,
+  onAssign,
+  onClear,
+  onEdit,
+  onTeamClick,
+  accentColor,
+}: {
+  rounds: MatchRound[];
+  availableTeams: TeamPoolItem[];
+  onDrop: (e: React.DragEvent, round: MatchRound, game: MatchGame, side: 'A' | 'B') => void;
+  onAssign: (round: MatchRound, game: MatchGame, side: 'A' | 'B', team: TeamPoolItem) => void;
+  onClear: (round: MatchRound, game: MatchGame, side: 'A' | 'B') => void;
+  onEdit: (round: MatchRound, game: MatchGame) => void;
+  onTeamClick?: (teamName: string) => void;
+  accentColor?: string;
+}) {
   const sorted = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber);
   const maxMatches = Math.max(...sorted.map((r) => r.matches.length), 1);
   const containerHeight = Math.max(CARD_H, maxMatches * CARD_H + (maxMatches - 1) * 28);
@@ -324,15 +425,30 @@ function BracketTree({
     <div className="relative overflow-x-auto pb-2">
       <div className="relative" style={{ minWidth: totalWidth, height: containerHeight + 32 }}>
         {/* Column headers */}
-        {sorted.map((round, ri) => (
-          <div
-            key={`hdr-${round.roundId}`}
-            className="absolute top-0 text-xs font-bold text-slate-400 text-center uppercase tracking-wider truncate px-1"
-            style={{ left: ri * (CARD_W + COL_GAP), width: CARD_W }}
-          >
-            {round.roundName.split(' · ').pop()}
-          </div>
-        ))}
+        {sorted.map((round, ri) => {
+          const label = round.roundName.split(' · ').pop() ?? '';
+          const isFinal = /决赛|final/i.test(label);
+          return (
+            <div
+              key={`hdr-${round.roundId}`}
+              className="absolute top-0 flex items-center justify-center"
+              style={{ left: ri * (CARD_W + COL_GAP), width: CARD_W }}
+            >
+              <span
+                className={`text-[11px] font-semibold tracking-wide truncate px-2.5 py-0.5 rounded-full ${
+                  isFinal
+                    ? 'bg-amber-100 text-amber-700'
+                    : accentColor
+                      ? 'text-slate-600'
+                      : 'text-slate-500'
+                }`}
+                style={accentColor && !isFinal ? { color: accentColor } : undefined}
+              >
+                {label}
+              </span>
+            </div>
+          );
+        })}
 
         {/* Connector lines */}
         <svg className="absolute top-6 left-0 pointer-events-none" width={totalWidth} height={containerHeight}>
@@ -345,26 +461,29 @@ function BracketTree({
             const stepCurrent = round.matches.length <= 1 ? 0 : containerHeight / round.matches.length;
             const stepNext = nextRound.matches.length <= 1 ? 0 : containerHeight / nextRound.matches.length;
 
+            // 季军赛 game 不产生入线（它与决赛共处同一列但不来自胜者链路）
+            const effectiveNextCount = nextRound.matches.filter((g) => !g.isThirdPlaceGame).length;
             return round.matches.map((game, gi) => {
+              if (game.isThirdPlaceGame) return null; // 季军赛本身无出线
               const y1 = round.matches.length === 1
                 ? containerHeight / 2
                 : gi * stepCurrent + stepCurrent / 2;
-              // 1:1 rounds (LB same-count): each game connects to the same index
-              // 2:1 rounds (halving): two games converge to one
-              const ni = nextRound.matches.length === round.matches.length
+              // 用 effectiveNextCount 计算 ni，让两路半决赛都收敛到决赛（而非季军赛）
+              const ni = effectiveNextCount === round.matches.length
                 ? gi
                 : Math.floor(gi / 2);
               const y2 = nextRound.matches.length === 1
                 ? containerHeight / 2
                 : ni * stepNext + stepNext / 2;
               const hasWinner = game.status === 'completed' && game.winner;
+              const idleStroke = accentColor ? `${accentColor}40` : '#e2e8f0';
               return (
                 <path
                   key={`${round.roundId}-${game.gameId}`}
                   d={`M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`}
                   fill="none"
-                  stroke={hasWinner ? '#10b981' : '#e2e8f0'}
-                  strokeWidth={hasWinner ? 2 : 1.5}
+                  stroke={hasWinner ? '#10b981' : idleStroke}
+                  strokeWidth={hasWinner ? 2.5 : 1.5}
                 />
               );
             });
@@ -475,9 +594,12 @@ function MatchCard({
       />
       <div className={`h-px ${completed ? 'bg-emerald-100' : 'bg-slate-100'}`} />
       <div className="flex items-center gap-1 px-2.5 h-4">
+        {game.isThirdPlaceGame && (
+          <span className="text-[9px] font-medium text-amber-600 bg-amber-50 rounded px-1 shrink-0">季军赛</span>
+        )}
         {game.startTime ? (
           <>
-            <CalendarClock size={10} className="text-primary" />
+            <CalendarClock size={10} className="text-primary shrink-0" />
             <span className="text-[10px] truncate text-slate-500">{game.startTime}</span>
           </>
         ) : null}
@@ -520,7 +642,7 @@ function TeamRow({
   // BYE 槽：直接显示"轮空"
   if (isByeSlot) {
     return (
-      <div className="flex items-center gap-2 px-2.5 h-[32px] bg-slate-50/60">
+      <div className="flex items-center gap-2 px-2.5 h-[33px] bg-slate-50/60">
         <div className="w-5 h-5 rounded bg-slate-200 shrink-0" />
         <span className="text-xs text-slate-400 italic">轮空 BYE</span>
       </div>
@@ -551,7 +673,7 @@ function TeamRow({
       onDragLeave={() => setIsDragOver(false)}
       onDrop={(e) => { setIsDragOver(false); onDrop(e); }}
       onClick={canAssign ? (e) => { e.stopPropagation(); setShowPicker((v) => !v); } : undefined}
-      className={`group/row relative flex items-center gap-1.5 h-[32px] transition-colors ${bgCls} ${
+      className={`group/row relative flex items-center gap-1.5 h-[33px] transition-colors ${bgCls} ${
         winner ? 'border-l-2 border-emerald-500 pl-2 pr-2' : 'px-2.5'
       } ${isDragOver ? 'outline outline-1 outline-primary outline-offset-[-1px]' : ''
       } ${canAssign ? 'cursor-pointer' : ''} ${!placeholder ? 'cursor-grab active:cursor-grabbing' : ''}`}

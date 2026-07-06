@@ -1,9 +1,12 @@
 import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, X, AlertCircle, Play, ArrowRight } from 'lucide-react';
 import type { MatchItem, MatchRound, TournamentStage } from '../../data/mockData';
-import { applyTemplate, validateStages, generateMatchRounds, computeRoundRobinStandings, createDefaultStage } from '../../data/mockData';
+import { applyTemplate, validateStages, generateMatchRounds, createDefaultStage } from '../../data/mockData';
 import { useMatch, useMatchActions } from '../../context/matchHooks';
 import StageConfigForm from './StageConfigForm';
+import EliminationBracket from './bracket/EliminationBracket';
+import RoundRobinBracket from './bracket/RoundRobinBracket';
+import SwissBracket from './bracket/SwissBracket';
 
 const stageTypeOptions: { value: TournamentStage['type']; label: string }[] = [
   { value: 'ROUND_ROBIN', label: '循环赛' },
@@ -301,258 +304,64 @@ export default function StageManager({ onSave, onNavigateToCompetition }: StageM
   );
 }
 
+// 预览直接复用比赛管理的对阵图组件，保证两者完全一致
+const NOOP = () => {};
+
 function StagePreview({ stage, rounds }: { stage: TournamentStage; rounds: MatchRound[] }) {
   if (rounds.length === 0) return <div className="text-sm text-slate-400">无对阵数据</div>;
 
   switch (stage.type) {
     case 'ROUND_ROBIN':
       return (
-        <RoundRobinPreview
-          rounds={rounds}
-          winPoints={stage.config.winPoints ?? 3}
-          drawPoints={stage.config.drawPoints ?? 1}
-          lossPoints={stage.config.lossPoints ?? 0}
-        />
+        <div className="pointer-events-none">
+          <RoundRobinBracket
+            rounds={rounds}
+            availableTeams={[]}
+            onUpdateGame={NOOP}
+            winPoints={stage.config.winPoints ?? 3}
+            drawPoints={stage.config.drawPoints ?? 1}
+            lossPoints={stage.config.lossPoints ?? 0}
+          />
+        </div>
       );
     case 'SINGLE_ELIMINATION':
-      return <EliminationPreview rounds={rounds} />;
+      return (
+        <div className="pointer-events-none">
+          <EliminationBracket
+            rounds={rounds}
+            availableTeams={[]}
+            onUpdateGame={NOOP}
+            onAssignTeam={NOOP}
+            previewMode
+          />
+        </div>
+      );
     case 'DOUBLE_ELIMINATION':
-      return <DoubleEliminationPreview rounds={rounds} />;
+      return (
+        <div className="pointer-events-none">
+          <EliminationBracket
+            rounds={rounds}
+            availableTeams={[]}
+            onUpdateGame={NOOP}
+            onAssignTeam={NOOP}
+            variant="double"
+            previewMode
+          />
+        </div>
+      );
     case 'SWISS':
-      return <SwissPreview rounds={rounds} />;
+      return (
+        <div className="pointer-events-none">
+          <SwissBracket
+            rounds={rounds}
+            availableTeams={[]}
+            stage={stage}
+            onUpdateGame={NOOP}
+            onPairNextRound={NOOP}
+          />
+        </div>
+      );
     default:
       return null;
   }
-}
-
-function groupRoundsByGroup(rounds: MatchRound[]): [string, MatchRound[]][] {
-  const map = new Map<string, MatchRound[]>();
-  rounds.forEach((r) => {
-    const parts = r.roundName.split(' · ');
-    const group = parts[1] || '默认组';
-    if (!map.has(group)) map.set(group, []);
-    map.get(group)!.push(r);
-  });
-  return Array.from(map.entries()).map(([label, list]) => [label, list.sort((a, b) => a.roundNumber - b.roundNumber)]);
-}
-
-function RoundRobinPreview({ rounds, winPoints = 3, drawPoints = 1, lossPoints = 0 }: { rounds: MatchRound[]; winPoints?: number; drawPoints?: number; lossPoints?: number }) {
-  const groups = groupRoundsByGroup(rounds);
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      {groups.map(([label, groupRounds]) => {
-        const teamSet = new Set<string>();
-        groupRounds.forEach((r) => r.matches.forEach((g) => { teamSet.add(g.teamA); teamSet.add(g.teamB); }));
-        const teams = Array.from(teamSet);
-        const findGame = (a: string, b: string) => {
-          for (const r of groupRounds) {
-            for (const g of r.matches) {
-              if ((g.teamA === a && g.teamB === b) || (g.teamA === b && g.teamB === a)) return g;
-            }
-          }
-          return null;
-        };
-        return (
-          <div key={label} className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-medium text-slate-700">{label}</div>
-              <div className="text-[10px] text-slate-400">积分规则：胜 {winPoints} / 平 {drawPoints} / 负 {lossPoints}</div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[11px] border-collapse">
-                <thead>
-                  <tr>
-                    <th className="text-left p-1.5 bg-slate-50 border border-slate-100 text-slate-500 sticky left-0">队伍</th>
-                    {teams.map((t) => <th key={t} className="p-1.5 bg-slate-50 border border-slate-100 text-slate-500 min-w-[56px]">{t}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {teams.map((row) => (
-                    <tr key={row}>
-                      <td className="p-1.5 border border-slate-100 text-slate-600 sticky left-0 bg-white font-medium">{row}</td>
-                      {teams.map((col) => {
-                        if (row === col) return <td key={col} className="p-1.5 border border-slate-100 text-center text-slate-300">-</td>;
-                        const g = findGame(row, col);
-                        const content = g && g.status === 'completed' && g.scoreA !== undefined && g.scoreB !== undefined
-                          ? `${g.teamA === row ? g.scoreA : g.scoreB}:${g.teamA === row ? g.scoreB : g.scoreA}`
-                          : (g ? 'VS' : '');
-                        return <td key={col} className="p-1.5 border border-slate-100 text-center text-slate-500">{content}</td>;
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {<StandingPreview
-              rounds={groupRounds}
-              winPoints={winPoints}
-              drawPoints={drawPoints}
-              lossPoints={lossPoints}
-            />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function StandingPreview({ rounds, winPoints, drawPoints, lossPoints }: { rounds: MatchRound[]; winPoints: number; drawPoints: number; lossPoints: number }) {
-  const standings = computeRoundRobinStandings(rounds, winPoints, drawPoints, lossPoints);
-  if (standings.length === 0) return null;
-  return (
-    <div className="space-y-2">
-      <div className="text-xs font-medium text-slate-700">积分榜预览</div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[10px] border-collapse">
-          <thead>
-            <tr className="bg-slate-50">
-              {['#', '队伍', '赛', '胜', '平', '负', '积分'].map((h) => (
-                <th key={h} className="p-1.5 border border-slate-100 text-slate-500">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {standings.map((s, i) => (
-              <tr key={s.teamName}>
-                <td className="p-1.5 border border-slate-100 text-center text-slate-500">{i + 1}</td>
-                <td className="p-1.5 border border-slate-100 text-slate-700 font-medium">{s.teamName}</td>
-                <td className="p-1.5 border border-slate-100 text-center text-slate-600">{s.played}</td>
-                <td className="p-1.5 border border-slate-100 text-center text-slate-600">{s.wins}</td>
-                <td className="p-1.5 border border-slate-100 text-center text-slate-600">{s.draws}</td>
-                <td className="p-1.5 border border-slate-100 text-center text-slate-600">{s.losses}</td>
-                <td className="p-1.5 border border-slate-100 text-center font-medium text-primary">{s.points}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function EliminationTree({ rounds, label }: { rounds: MatchRound[]; label: string }) {
-  const sorted = [...rounds].sort((a, b) => a.roundNumber - b.roundNumber);
-  const cardHeight = 56;
-  const gapY = 24;
-  const colGap = 48;
-  const maxMatches = Math.max(...sorted.map((r) => r.matches.length), 1);
-  const containerHeight = maxMatches * cardHeight + (maxMatches - 1) * gapY;
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-      <div className="text-xs font-medium text-slate-700">{label}</div>
-      <div className="relative flex gap-4 overflow-x-auto pb-2" style={{ minHeight: containerHeight + 40 }}>
-        <svg className="absolute top-8 left-0 h-full pointer-events-none" style={{ minWidth: sorted.length * (160 + colGap) }}>
-          {sorted.map((round, ri) => {
-            if (ri === sorted.length - 1) return null;
-            const nextRound = sorted[ri + 1];
-            const colWidth = 160;
-            const x1 = ri * (colWidth + colGap) + colWidth;
-            const x2 = x1 + colGap;
-            return round.matches.map((game, gi) => {
-              const y1 = round.matches.length === 1 ? containerHeight / 2 : gi * (containerHeight / (round.matches.length || 1)) + cardHeight / 2;
-              const nextIndex = Math.floor(gi / 2);
-              const y2 = nextRound.matches.length === 1 ? containerHeight / 2 : nextIndex * (containerHeight / (nextRound.matches.length || 1)) + cardHeight / 2;
-              return (
-                <path
-                  key={`${round.roundId}-${game.gameId}`}
-                  d={`M${x1},${y1} C${x1 + colGap / 2},${y1} ${x1 + colGap / 2},${y2} ${x2},${y2}`}
-                  fill="none"
-                  stroke="#e2e8f0"
-                  strokeWidth={1.5}
-                />
-              );
-            });
-          })}
-        </svg>
-        {sorted.map((round) => (
-          <div
-            key={round.roundId}
-            className="flex flex-col justify-around shrink-0 z-10"
-            style={{ width: 160, minHeight: containerHeight }}
-          >
-            <div className="text-xs text-center text-slate-500 mb-2">{round.roundName.split(' · ').pop()}</div>
-            {round.matches.map((game) => (
-              <div
-                key={game.gameId}
-                className="bg-white border border-slate-200 rounded-lg p-2 space-y-1 shadow-sm"
-                style={{ height: cardHeight }}
-              >
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-600 truncate flex-1">{game.teamA}</span>
-                  <span className="text-[10px] text-slate-400 bg-slate-50 px-1 rounded ml-1">{game.seedA || ''}</span>
-                </div>
-                <div className="text-[10px] text-slate-300 text-center leading-none">VS · {game.format || 'BO?'}</div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-600 truncate flex-1">{game.teamB}</span>
-                  <span className="text-[10px] text-slate-400 bg-slate-50 px-1 rounded ml-1">{game.seedB || ''}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function EliminationPreview({ rounds }: { rounds: MatchRound[] }) {
-  const groups = groupRoundsByGroup(rounds);
-  return (
-    <div className="space-y-6">
-      {groups.map(([label, groupRounds]) => (
-        <EliminationTree key={label} rounds={groupRounds} label={label} />
-      ))}
-    </div>
-  );
-}
-
-function DoubleEliminationPreview({ rounds }: { rounds: MatchRound[] }) {
-  const groups = groupRoundsByGroup(rounds);
-  return (
-    <div className="space-y-6">
-      {groups.map(([label, groupRounds]) => {
-        const wb = groupRounds.filter((r) => !r.roundName.includes('败者'));
-        const lb = groupRounds.filter((r) => r.roundName.includes('败者'));
-        return (
-          <div key={label} className="space-y-4">
-            <div className="text-xs font-medium text-slate-700">{label}</div>
-            {wb.length > 0 && <EliminationTree rounds={wb} label="胜者组" />}
-            {lb.length > 0 && <EliminationTree rounds={lb} label="败者组" />}
-            {wb.length === 0 && lb.length === 0 && <EliminationTree rounds={groupRounds} label="对阵图" />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function SwissPreview({ rounds }: { rounds: MatchRound[] }) {
-  const groups = groupRoundsByGroup(rounds);
-  return (
-    <div className="space-y-4">
-      {groups.map(([label, groupRounds]) => (
-        <div key={label} className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
-          <div className="text-xs font-medium text-slate-700">{label}</div>
-          <div className="space-y-3">
-            {groupRounds.map((round) => (
-              <div key={round.roundId}>
-                <div className="text-xs text-slate-500 mb-2">{round.roundName.split(' · ').pop()}</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {round.matches.map((game) => (
-                    <div key={game.gameId} className="flex items-center justify-between text-xs bg-slate-50 rounded px-2 py-1.5 border border-slate-100">
-                      <span className="text-slate-600 truncate flex-1 text-right pr-2">{game.teamA}</span>
-                      <span className="text-[10px] text-slate-400 shrink-0">VS</span>
-                      <span className="text-slate-600 truncate flex-1 pl-2">{game.teamB}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }

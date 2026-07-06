@@ -1624,6 +1624,8 @@ export interface MatchGame {
   seedB?: number;
   // 双败淘汰重制局标记
   isResetGame?: boolean;
+  // 季军赛标记（与决赛共处同一列）
+  isThirdPlaceGame?: boolean;
   // 录像链接（上传后填写）
   replayUrl?: string;
 }
@@ -1944,14 +1946,16 @@ function generateSingleEliminationStage(
     roundNumber = Math.max(roundNumber, groupRoundNumber);
 
     // 季军赛：把半决赛两场的负者通过 loserNextMatchId 推入
+    // 季军赛 game 并入决赛所在的 round（同一列展示），不新建额外轮次
     if (stage.config.thirdPlaceMatch) {
-      // currentMatches 此时是决赛的那1场，向前找半决赛（2场）
       const allGroupRounds = rounds.filter((r) => r.stageId === stage.stageId && r.groupIndex === g);
       const semiFinalRound = allGroupRounds.find((r) => r.matches.length === 2 && r.roundName.includes('半决赛'));
-      const thirdPlaceGameId = `${match.id}-S${stageIndex + 1}-R${roundNumber}-3P`;
+      const finalRound = allGroupRounds.find((r) => r.roundName.includes('决赛') && !r.roundName.includes('半决赛'));
+      const thirdPlaceGameId = `${match.id}-S${stageIndex + 1}-R${roundNumber - 1}-3P`;
       const thirdPlaceGame: MatchGame = {
-        ...createPlaceholderGame(match.id, `S${stageIndex + 1}-R${roundNumber}`, 0, `第${g + 1}组-半决赛负者1`, `第${g + 1}组-半决赛负者2`, `${nextDate(baseDate, roundNumber - 1)} 14:00`, stage.defaultFormat),
+        ...createPlaceholderGame(match.id, `S${stageIndex + 1}-R${roundNumber - 1}`, 1, `第${g + 1}组-半决赛负者1`, `第${g + 1}组-半决赛负者2`, `${nextDate(baseDate, roundNumber - 2)} 14:00`, stage.defaultFormat),
         gameId: thirdPlaceGameId,
+        isThirdPlaceGame: true,
       };
 
       // 建立半决赛负者 → 季军赛链路
@@ -1964,21 +1968,10 @@ function generateSingleEliminationStage(
         }
       }
 
-      rounds.push({
-        roundId: `${match.id}-S${stageIndex + 1}-R${roundNumber}`,
-        matchId: match.id,
-        roundName: `${stage.name} · 第${g + 1}组 · 季军赛`,
-        roundNumber,
-        stage: 'knockout',
-        startTime: `${nextDate(baseDate, roundNumber - 1)} 14:00`,
-        endTime: `${nextDate(baseDate, roundNumber - 1)} 18:00`,
-        status: 'upcoming',
-        matches: [thirdPlaceGame],
-        stageId: stage.stageId,
-        stageType: stage.type,
-        groupIndex: g,
-      });
-      roundNumber++;
+      // 季军赛并入决赛 round（不新建 round，不增加 roundNumber）
+      if (finalRound) {
+        finalRound.matches.push(thirdPlaceGame);
+      }
     }
   }
 
