@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, Users, UserCheck, UserX, TrendingUp,
-  ChevronLeft, ChevronRight, Shield, Ban, Crown,
+  ChevronLeft, ChevronRight, Shield, Ban, Crown, VolumeX, Coins, X,
 } from 'lucide-react';
-import { userListData } from '../../data/mockData';
-import type { UserItem, UserRole, UserStatus } from '../../data/mockData';
+import { userListData, BADGE_CONFIG } from '../../data/mockData';
+import type { UserItem, UserRole, UserStatus, UserBadge } from '../../data/mockData';
 import UserDetailDrawer from './UserDetailDrawer';
 
 // ── KPI ────────────────────────────────────────────────────────────────────
@@ -74,6 +75,8 @@ export default function UserManagement() {
   const [filterRole, setFilterRole] = useState<'all' | UserRole>('all');
   const [filterSource, setFilterSource] = useState<'all' | 'organic' | 'invite'>('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
+  const [filterCommunity, setFilterCommunity] = useState<'all' | 'normal' | 'muted'>('all');
+  const [filterBadge, setFilterBadge] = useState<'all' | UserBadge>('all');
   const [sortBy, setSortBy] = useState<'regTime' | 'points' | 'matchCount'>('regTime');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
 
@@ -98,6 +101,9 @@ export default function UserManagement() {
         if (filterRole !== 'all' && u.role !== filterRole) return false;
         if (filterSource !== 'all' && u.source !== filterSource) return false;
         if (filterCountry !== 'all' && u.country !== filterCountry) return false;
+        if (filterCommunity === 'muted' && !u.communityMuted) return false;
+        if (filterCommunity === 'normal' && u.communityMuted) return false;
+        if (filterBadge !== 'all' && !(u.badges ?? []).includes(filterBadge)) return false;
         return true;
       })
       .sort((a, b) => {
@@ -109,7 +115,7 @@ export default function UserManagement() {
         if (va > vb) return sortDir === 'desc' ? -1 : 1;
         return 0;
       });
-  }, [users, search, filterStatus, filterRole, filterSource, filterCountry, sortBy, sortDir]);
+  }, [users, search, filterStatus, filterRole, filterSource, filterCountry, filterCommunity, filterBadge, sortBy, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -173,7 +179,7 @@ export default function UserManagement() {
           pointsLog: [newLog, ...u.pointsLog],
           adminLog: [...u.adminLog, {
             id: `AL-${Date.now()}`, action: 'adjust_points' as const,
-            operator: 'Admin', reason: `${delta >= 0 ? '+' : ''}${delta} 积分 — ${reason}`,
+            operator: 'Admin', reason: `${delta >= 0 ? '+' : ''}${delta} 代币 — ${reason}`,
             time: new Date().toLocaleString('zh-CN'),
           }],
         };
@@ -198,13 +204,43 @@ export default function UserManagement() {
     );
   };
 
-  // 批量封禁
-  const handleBatchBan = () => {
-    selected.forEach((id) => {
-      const u = users.find((x) => x.id === id);
-      if (u && u.status === 'active') handleToggleBan(id, '批量封禁');
-    });
+  // ── 操作：社区禁言 / 解除禁言 ───────────────────────────────────────────
+  const handleToggleMute = (userId: string, reason?: string) => {
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id !== userId) return u;
+        if (!u.communityMuted) {
+          return {
+            ...u, communityMuted: true,
+            muteReason: reason || '管理员操作',
+            muteTime: new Date().toISOString().slice(0, 10),
+            adminLog: [...u.adminLog, {
+              id: `AL-${Date.now()}`, action: 'mute' as const,
+              operator: 'Admin', reason: reason || '管理员操作',
+              time: new Date().toLocaleString('zh-CN'),
+            }],
+          };
+        } else {
+          return {
+            ...u, communityMuted: false,
+            muteReason: undefined, muteTime: undefined,
+            adminLog: [...u.adminLog, {
+              id: `AL-${Date.now()}`, action: 'unmute' as const,
+              operator: 'Admin', reason: '解除社区禁言',
+              time: new Date().toLocaleString('zh-CN'),
+            }],
+          };
+        }
+      })
+    );
+  };
+
+  // 批量空投
+  const [showAirdrop, setShowAirdrop] = useState(false);
+  const handleBatchAirdrop = (amount: number, reason: string) => {
+    selected.forEach((id) => handleAdjustPoints(id, amount, reason));
     setSelected(new Set());
+    setShowAirdrop(false);
   };
 
   const toggleSelect = (id: string) => {
@@ -298,6 +334,23 @@ export default function UserManagement() {
 
             <div className="w-px h-5 bg-slate-200" />
 
+            {/* 社区状态 */}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-slate-500 mr-1">社区</span>
+              {([
+                { v: 'all', label: '全部' },
+                { v: 'normal', label: '正常' },
+                { v: 'muted', label: '禁言中' },
+              ] as const).map(({ v, label }) => (
+                <button key={v} onClick={() => { setFilterCommunity(v); setPage(1); }}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterCommunity === v ? 'bg-primary text-white border-primary' : 'border-slate-200 text-slate-600 hover:border-primary/50'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="w-px h-5 bg-slate-200" />
+
             {/* 国家 */}
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">国家</span>
@@ -307,6 +360,20 @@ export default function UserManagement() {
                 {ALL_COUNTRIES.map((c) => <option key={c} value={c}>{countryFlag[c] ?? ''} {c}</option>)}
               </select>
             </div>
+
+            <div className="w-px h-5 bg-slate-200" />
+
+            {/* 勋章 */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">勋章</span>
+              <select value={filterBadge} onChange={(e) => { setFilterBadge(e.target.value as 'all' | UserBadge); setPage(1); }}
+                className="text-xs border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <option value="all">全部勋章</option>
+                {(Object.entries(BADGE_CONFIG) as [UserBadge, typeof BADGE_CONFIG[UserBadge]][]).map(([key, cfg]) => (
+                  <option key={key} value={key}>{cfg.emoji} {cfg.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -314,9 +381,9 @@ export default function UserManagement() {
         {selected.size > 0 && (
           <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5">
             <span className="text-sm text-primary font-medium">已选 {selected.size} 人</span>
-            <button onClick={handleBatchBan}
-              className="text-xs px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
-              批量封禁
+            <button onClick={() => setShowAirdrop(true)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors">
+              <Coins size={12} />批量空投代币
             </button>
             <button onClick={() => setSelected(new Set())}
               className="text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors">
@@ -340,7 +407,7 @@ export default function UserManagement() {
                   <th className="text-left px-4 py-3">角色</th>
                   <th className="text-left px-4 py-3">国家</th>
                   <th className="text-left px-4 py-3 cursor-pointer select-none hover:text-slate-800" onClick={() => handleSort('points')}>
-                    积分 {sortBy === 'points' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
+                    代币 {sortBy === 'points' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
                   </th>
                   <th className="text-left px-4 py-3 cursor-pointer select-none hover:text-slate-800" onClick={() => handleSort('matchCount')}>
                     参赛 {sortBy === 'matchCount' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
@@ -383,7 +450,16 @@ export default function UserManagement() {
                     <td className="px-4 py-3 font-medium text-slate-800">{u.points.toLocaleString()}</td>
                     <td className="px-4 py-3 text-slate-600">{u.matchCount}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs">{u.regTime}</td>
-                    <td className="px-4 py-3"><StatusBadge status={u.status} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <StatusBadge status={u.status} />
+                        {u.communityMuted && (
+                          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-medium">
+                            <VolumeX size={10} />禁言
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <button onClick={() => setDrawerUserId(u.id)}
@@ -449,8 +525,128 @@ export default function UserManagement() {
           onToggleBan={handleToggleBan}
           onAdjustPoints={handleAdjustPoints}
           onChangeRole={handleChangeRole}
+          onToggleMute={handleToggleMute}
+        />
+      )}
+
+      {/* 批量空投弹窗 */}
+      {showAirdrop && (
+        <AirdropModal
+          count={selected.size}
+          onConfirm={handleBatchAirdrop}
+          onClose={() => setShowAirdrop(false)}
         />
       )}
     </div>
+  );
+}
+
+// ── 批量空投弹窗 ──────────────────────────────────────────────────────────────
+function AirdropModal({
+  count,
+  onConfirm,
+  onClose,
+}: {
+  count: number;
+  onConfirm: (amount: number, reason: string) => void;
+  onClose: () => void;
+}) {
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('空投活动');
+  const [error, setError] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const n = parseInt(amount, 10);
+    if (!n || n <= 0) { setError('请输入有效的代币数量'); return; }
+    if (!reason.trim()) { setError('请填写空投原因'); return; }
+    onConfirm(n, reason.trim());
+  };
+
+  return createPortal(
+    <>
+      <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm pointer-events-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center">
+                <Coins size={14} className="text-amber-600" />
+              </div>
+              <h3 className="font-semibold text-slate-800 text-sm">批量空投代币</h3>
+            </div>
+            <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Body */}
+          <form onSubmit={handleSubmit} className="p-5 space-y-4">
+            {/* 目标用户提示 */}
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 rounded-lg border border-amber-100">
+              <Users size={14} className="text-amber-600 flex-shrink-0" />
+              <span className="text-sm text-amber-700">
+                将向 <span className="font-bold">{count}</span> 名用户各发放代币
+              </span>
+            </div>
+
+            {/* 数量 */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                空投数量 <span className="text-slate-400 font-normal">（每人）</span>
+              </label>
+              <div className="relative">
+                <Coins size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="number"
+                  min={1}
+                  value={amount}
+                  onChange={e => { setAmount(e.target.value); setError(''); }}
+                  placeholder="输入代币数量"
+                  className="w-full pl-8 pr-3 py-2.5 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* 原因 */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">空投原因</label>
+              <input
+                value={reason}
+                onChange={e => { setReason(e.target.value); setError(''); }}
+                placeholder="例如：运营活动奖励"
+                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+              />
+            </div>
+
+            {/* 合计预览 */}
+            {amount && parseInt(amount) > 0 && (
+              <div className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg text-xs text-slate-500">
+                <span>合计发放</span>
+                <span className="font-bold text-slate-800 text-sm">
+                  {(parseInt(amount) * count).toLocaleString()} 代币
+                </span>
+              </div>
+            )}
+
+            {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={onClose}
+                className="flex-1 py-2.5 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors">
+                取消
+              </button>
+              <button type="submit"
+                className="flex-1 py-2.5 text-sm text-white bg-amber-500 hover:bg-amber-600 rounded-lg font-semibold transition-colors">
+                确认空投
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </>,
+    document.body
   );
 }

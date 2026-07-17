@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle, XCircle, Plus, X, Search } from 'lucide-react';
 import { organizerData } from '../../data/mockData';
 import type { OrganizerItem } from '../../data/mockData';
@@ -206,7 +207,7 @@ export default function OrganizerManagement() {
         </div>
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-xl border border-slate-200 w-full max-w-md shadow-lg">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -298,9 +299,10 @@ export default function OrganizerManagement() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      {selectedOrg && (
+      {selectedOrg && createPortal(
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
           <div className="bg-white w-full max-w-md h-full shadow-xl flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -400,7 +402,8 @@ export default function OrganizerManagement() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

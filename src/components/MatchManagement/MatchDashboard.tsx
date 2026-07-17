@@ -111,7 +111,7 @@ function pendingBadge(match: MatchItem, filter: KpiFilter): { text: string; cls:
   if (filter === 'pendingPublish' || (filter === null && match.source === 'admin' && match.status === 'draft'))
     return { text: '待发布', cls: 'bg-slate-100 text-slate-500' };
   if (filter === 'pendingPoints')
-    return { text: '积分待发放', cls: 'bg-violet-50 text-violet-600' };
+    return { text: '代币待发放', cls: 'bg-violet-50 text-violet-600' };
   if (filter === 'pendingResult' || (filter === null && match.status === 'ended'))
     return { text: '成绩待录入', cls: 'bg-rose-50 text-rose-600' };
   return null;
@@ -125,7 +125,7 @@ function actionLabel(filter: KpiFilter): string {
     case 'open':              return '查看报名';
     case 'live':              return '查看赛程';
     case 'pendingResult':     return '录入成绩';
-    case 'pendingPoints':     return '发放积分';
+    case 'pendingPoints':     return '发放代币';
     default:                  return '去处理';
   }
 }
@@ -226,7 +226,7 @@ function PendingSection({
     live:               '进行中赛事',
     open:               '报名中赛事',
     pendingResult:      '待录入成绩',
-    pendingPoints:      '待发放积分',
+    pendingPoints:      '待发放代币',
   }[filter];
 
   const shown = matches.slice(0, 6);

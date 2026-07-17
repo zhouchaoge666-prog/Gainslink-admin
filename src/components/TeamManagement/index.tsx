@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, Users, Shield, Ban, CheckCircle,
   ChevronLeft, ChevronRight, X, Trophy,
@@ -93,7 +94,7 @@ function TeamDetailDrawer({
   onClose: () => void;
   onToggleStatus: (id: string, status: TeamStatus) => void;
 }) {
-  return (
+  return createPortal(
     <>
       <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
       <div className="fixed right-0 top-0 h-full w-[440px] bg-white shadow-2xl z-50 flex flex-col">
@@ -217,7 +218,8 @@ function TeamDetailDrawer({
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

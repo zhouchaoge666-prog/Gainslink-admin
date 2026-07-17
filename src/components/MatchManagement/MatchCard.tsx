@@ -55,7 +55,7 @@ export default function MatchCard({ match, onView, onApprove, onReject, onResetT
       ? { key: 'result', text: '赛果待录入', icon: Award, color: 'text-rose-600', bg: 'bg-rose-50', dot: 'bg-rose-500' }
       : null,
     pendingPoints > 0
-      ? { key: 'points', text: `${pendingPoints} 条积分待发放`, icon: Coins, color: 'text-violet-600', bg: 'bg-violet-50', dot: 'bg-violet-500' }
+      ? { key: 'points', text: `${pendingPoints} 条代币待发放`, icon: Coins, color: 'text-violet-600', bg: 'bg-violet-50', dot: 'bg-violet-500' }
       : null,
   ].filter(Boolean) as { key: string; text: string; icon: typeof Award | null; color: string; bg: string; dot: string }[];
 

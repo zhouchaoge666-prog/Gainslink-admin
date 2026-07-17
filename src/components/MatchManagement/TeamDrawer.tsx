@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { X, Users, Trophy, MapPin, CalendarDays, Crown } from 'lucide-react';
 import { teamListData } from '../../data/mockData';
 import type { TeamItem } from '../../data/mockData';
@@ -73,7 +74,7 @@ function TeamLogo({ name, size = 40 }: { name: string; size?: number }) {
 
 // ── 无数据占位 ────────────────────────────────────────────────────────────────
 function NoDataPanel({ teamName, onClose }: { teamName: string; onClose: () => void }) {
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
       <div className="relative ml-auto h-full w-[440px] bg-white shadow-2xl flex flex-col">
@@ -90,7 +91,8 @@ function NoDataPanel({ teamName, onClose }: { teamName: string; onClose: () => v
           该战队尚无系统档案记录
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -100,7 +102,7 @@ export default function TeamDrawer({ teamName, onClose }: TeamDrawerProps) {
 
   if (!team) return <NoDataPanel teamName={teamName} onClose={onClose} />;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
       <div className="relative ml-auto h-full w-[440px] bg-white shadow-2xl flex flex-col">
@@ -199,6 +201,7 @@ export default function TeamDrawer({ teamName, onClose }: TeamDrawerProps) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

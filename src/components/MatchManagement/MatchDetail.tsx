@@ -46,12 +46,13 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { MatchItem } from '../../data/mockData';
+import { userListData } from '../../data/mockData';
 import { useMatch, useMatchActions } from '../../context/matchHooks';
 import MatchSignupAudit from './MatchSignupAudit';
 import MatchCompetitionMgmt from './MatchCompetitionMgmt';
 import MatchResultInput from './MatchResultInput';
 import StageManager from './StageManager';
-import UserDrawer from './UserDrawer';
+import UserDetailDrawer from '../UserManagement/UserDetailDrawer';
 import TeamDrawer from './TeamDrawer';
 import ImageUpload from './ImageUpload';
 import RichTextEditor from './RichTextEditor';
@@ -379,7 +380,19 @@ export default function MatchDetail({ match, onSave, onPublish, onStartMatch, on
 
       {state.toast && <Toast message={state.toast.message} type={state.toast.type} onClose={hideToast} />}
 
-      {drawerUserId && <UserDrawer userId={drawerUserId} onClose={() => setDrawerUserId(null)} />}
+      {drawerUserId && (() => {
+        const drawerUser = userListData.find(u => u.id === drawerUserId) ?? null;
+        return drawerUser ? (
+          <UserDetailDrawer
+            user={drawerUser}
+            onClose={() => setDrawerUserId(null)}
+            onToggleBan={() => {}}
+            onAdjustPoints={() => {}}
+            onChangeRole={() => {}}
+            onToggleMute={() => {}}
+          />
+        ) : null;
+      })()}
       {drawerTeamName && <TeamDrawer teamName={drawerTeamName} onClose={() => setDrawerTeamName(null)} />}
     </div>
   );

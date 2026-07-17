@@ -256,7 +256,7 @@ export default function MatchResultInput({ matchId, rounds = [], stages = [], on
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">奖励积分</label>
+                  <label className="block text-xs text-slate-500 mb-1">奖励代币</label>
                   <NumericInput
                     value={item.pointsEarned}
                     onChange={(value) => updateResult(item.id, 'pointsEarned', value ?? 0)}
@@ -293,10 +293,10 @@ export default function MatchResultInput({ matchId, rounds = [], stages = [], on
               </div>
               <div>
                 <div className={`text-sm font-medium ${pointsDistributed ? 'text-emerald-700' : 'text-violet-700'}`}>
-                  {pointsDistributed ? '积分已发放' : '成绩已全部确认，可以发放积分'}
+                  {pointsDistributed ? '代币已发放' : '成绩已全部确认，可以发放代币'}
                 </div>
                 <div className="text-xs text-slate-500">
-                  共 {results.length} 支队伍，合计 <span className="font-medium">{totalPoints.toLocaleString()}</span> 积分
+                  共 {results.length} 支队伍，合计 <span className="font-medium">{totalPoints.toLocaleString()}</span> 代币
                 </div>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Video, Link, Upload, ExternalLink, Trash2 } from 'lucide-react';
 import type { MatchGame, MatchRound } from '../../../data/mockData';
 import type { TeamPoolItem } from '../TeamPool';
@@ -82,7 +83,7 @@ export default function MatchEditorModal({
     onClose();
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-lg w-full max-w-md overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
@@ -307,6 +308,7 @@ export default function MatchEditorModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

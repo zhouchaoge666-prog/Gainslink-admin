@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronLeft,
   ChevronRight,
@@ -197,7 +198,7 @@ export default function MatchCreateFlow({ onSave, onCancel }: MatchCreateFlowPro
     setLastSavedTime(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[60] bg-bg flex flex-col">
       <div className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-5">
         <button
@@ -1002,6 +1003,7 @@ function Step3({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

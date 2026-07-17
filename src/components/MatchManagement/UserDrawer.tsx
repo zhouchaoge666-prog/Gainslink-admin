@@ -87,7 +87,7 @@ export default function UserDrawer({ userId, onClose }: UserDrawerProps) {
             <div className="bg-primary/5 rounded-xl p-4 text-center">
               <div className="flex items-center justify-center gap-1 text-primary mb-1">
                 <Coins size={16} />
-                <span className="text-sm font-medium">积分余额</span>
+                <span className="text-sm font-medium">代币余额</span>
               </div>
               <div className="text-xl font-bold text-slate-800">{user.points.toLocaleString()}</div>
             </div>

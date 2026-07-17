@@ -1,9 +1,14 @@
 import { useState } from 'react';
-import { LayoutDashboard, Trophy, Users, LogOut, HelpCircle, ChevronDown, Shield } from 'lucide-react';
+import { LayoutDashboard, Trophy, Users, LogOut, HelpCircle, ChevronDown, MessageSquareText } from 'lucide-react';
 
-export type MenuKey = 'overview' | 'match-dashboard' | 'match-list' | 'match-organizer' | 'user-mgmt' | 'team-mgmt';
+export type MenuKey =
+  | 'overview'
+  | 'match-dashboard' | 'match-list' | 'match-organizer'
+  | 'user-mgmt' | 'team-mgmt'
+  | 'community-overview' | 'community-posts' | 'community-comments' | 'community-reports';
 
 const matchMgmtKeys: MenuKey[] = ['match-dashboard', 'match-list', 'match-organizer', 'team-mgmt'];
+const communityKeys: MenuKey[] = ['community-overview', 'community-posts', 'community-comments', 'community-reports'];
 
 interface SidebarProps {
   active: MenuKey;
@@ -12,8 +17,10 @@ interface SidebarProps {
 
 export default function Sidebar({ active, onChange }: SidebarProps) {
   const [matchMgmtOpen, setMatchMgmtOpen] = useState(true);
+  const [communityOpen, setCommunityOpen] = useState(communityKeys.includes(active));
 
   const isMatchMgmtActive = matchMgmtKeys.includes(active);
+  const isCommunityActive = communityKeys.includes(active);
 
   const subItem = (key: MenuKey, label: string) => (
     <button
@@ -87,6 +94,33 @@ export default function Sidebar({ active, onChange }: SidebarProps) {
           <Users size={18} />
           <span className="flex-1">用户管理</span>
         </button>
+
+        {/* 社区管理 — 可展开 */}
+        <div>
+          <button
+            onClick={() => setCommunityOpen(!communityOpen)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+              isCommunityActive
+                ? 'bg-primary text-white'
+                : 'text-slate-400 hover:bg-sidebar-hover hover:text-slate-200'
+            }`}
+          >
+            <MessageSquareText size={18} />
+            <span className="flex-1">社区管理</span>
+            <ChevronDown
+              size={14}
+              className={`transition-transform ${communityOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {communityOpen && (
+            <div className="mt-1 ml-6 space-y-0.5">
+              {subItem('community-overview', '社区总览')}
+              {subItem('community-posts', '帖子管理')}
+              {subItem('community-comments', '评论管理')}
+              {subItem('community-reports', '举报审核')}
+            </div>
+          )}
+        </div>
       </nav>
 
       <div className="p-3 border-t border-slate-700 space-y-1">

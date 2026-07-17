@@ -1157,6 +1157,27 @@ export function getTeamByName(teamName: string): TeamItem | null {
 // ============ 用户列表 ============
 export type UserRole = 'player' | 'organizer' | 'admin';
 export type UserStatus = 'active' | 'banned';
+
+export type UserBadge =
+  | 'champion'
+  | 'runner_up'
+  | 'mvp'
+  | 'top_player'
+  | 'veteran'
+  | 'newcomer'
+  | 'community_star'
+  | 'organizer_pro';
+
+export const BADGE_CONFIG: Record<UserBadge, { label: string; emoji: string; color: string; bg: string }> = {
+  champion:       { label: '赛事冠军',   emoji: '🏆', color: 'text-yellow-700', bg: 'bg-yellow-50 border-yellow-200' },
+  runner_up:      { label: '赛事亚军',   emoji: '🥈', color: 'text-slate-600',  bg: 'bg-slate-100 border-slate-200' },
+  mvp:            { label: 'MVP',         emoji: '⭐', color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200' },
+  top_player:     { label: '顶级玩家',   emoji: '💎', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
+  veteran:        { label: '资深玩家',   emoji: '🎖️', color: 'text-blue-700',   bg: 'bg-blue-50 border-blue-200' },
+  newcomer:       { label: '新星',        emoji: '🌟', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
+  community_star: { label: '社区之星',   emoji: '📣', color: 'text-pink-700',   bg: 'bg-pink-50 border-pink-200' },
+  organizer_pro:  { label: '专业组织方', emoji: '🎯', color: 'text-teal-700',   bg: 'bg-teal-50 border-teal-200' },
+};
 export type PointsEventType =
   | 'checkin'
   | 'match_win'
@@ -1188,7 +1209,7 @@ export interface UserMatchHistoryItem {
 
 export interface UserAdminLogItem {
   id: string;
-  action: 'ban' | 'unban' | 'adjust_points' | 'change_role';
+  action: 'ban' | 'unban' | 'adjust_points' | 'change_role' | 'mute' | 'unmute';
   operator: string;
   reason: string;
   time: string;
@@ -1216,9 +1237,13 @@ export interface UserItem {
   status: UserStatus;
   banReason?: string;
   banTime?: string;
+  communityMuted?: boolean;
+  muteReason?: string;
+  muteTime?: string;
   pointsLog: PointsLogItem[];
   matchHistory: UserMatchHistoryItem[];
   adminLog: UserAdminLogItem[];
+  badges?: UserBadge[];
 }
 
 export const userListData: UserItem[] = [
@@ -1242,6 +1267,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1003', matchName: 'MLBB 周末杯', game: 'Mobile Legends', joinTime: '2026-03-10', result: 'eliminated', pointsEarned: 50 },
     ],
     adminLog: [],
+    badges: ['champion', 'mvp'],
   },
   {
     id: 'U-8823', nickname: 'ProGamer_X', username: 'progamer_x', email: 'progamer@outlook.com',
@@ -1259,6 +1285,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1005', matchName: '英雄联盟周末赛', game: '英雄联盟', joinTime: '2026-04-05', result: 'top8', pointsEarned: 50 },
     ],
     adminLog: [],
+    badges: ['top_player', 'veteran'],
   },
   {
     id: 'U-7715', nickname: 'TeamAlpha', username: 'teamalpha_cn', email: 'teamalpha@163.com',
@@ -1278,6 +1305,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1008', matchName: 'MLBB 春季赛', game: 'Mobile Legends', joinTime: '2026-02-20', result: 'top4', pointsEarned: 100 },
     ],
     adminLog: [],
+    badges: ['champion', 'organizer_pro', 'veteran'],
   },
   {
     id: 'U-6654', nickname: 'GamerGirl99', username: 'gamergirl99', email: 'gamergirl@gmail.com',
@@ -1295,6 +1323,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1010', matchName: 'MLBB 新手杯', game: 'Mobile Legends', joinTime: '2026-05-28', result: 'eliminated', pointsEarned: 50 },
     ],
     adminLog: [],
+    badges: ['newcomer'],
   },
   {
     id: 'U-5543', nickname: 'NoobMaster', username: 'noobmaster_vn', email: 'noobmaster@gmail.com',
@@ -1327,6 +1356,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1013', matchName: '马来西亚新手杯', game: 'Mobile Legends', joinTime: '2026-05-27', result: 'eliminated', pointsEarned: 50 },
     ],
     adminLog: [],
+    badges: ['newcomer'],
   },
   {
     id: 'U-3321', nickname: 'LunaStar', username: 'lunastar_id', email: 'lunastar@gmail.com',
@@ -1347,6 +1377,7 @@ export const userListData: UserItem[] = [
     adminLog: [
       { id: 'AL-001', action: 'ban', operator: 'Admin', reason: '使用外挂程序，违反平台规定', time: '2026-05-01 10:05' },
     ],
+    badges: ['champion', 'community_star'],
   },
   {
     id: 'U-2210', nickname: 'DragonSlayer', username: 'dragonslayer_cn', email: 'dragonslayer@qq.com',
@@ -1362,6 +1393,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1016', matchName: '英雄联盟周末杯', game: '英雄联盟', joinTime: '2026-05-05', result: 'champion', pointsEarned: 200 },
     ],
     adminLog: [],
+    badges: ['champion', 'mvp'],
   },
   {
     id: 'U-1109', nickname: 'PixelHero', username: 'pixelhero_ph', email: 'pixelhero@gmail.com',
@@ -1381,6 +1413,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1019', matchName: 'MLBB 精英赛', game: 'Mobile Legends', joinTime: '2026-03-20', result: 'runner_up', pointsEarned: 200 },
     ],
     adminLog: [],
+    badges: ['champion', 'organizer_pro', 'veteran', 'community_star'],
   },
   {
     id: 'U-0098', nickname: 'StormRider', username: 'stormrider_vn', email: 'stormrider@gmail.com',
@@ -1428,6 +1461,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1022', matchName: '女子组电竞联赛', game: '王者荣耀', joinTime: '2026-05-18', result: 'runner_up', pointsEarned: 200 },
     ],
     adminLog: [],
+    badges: ['runner_up', 'mvp'],
   },
   {
     id: 'U-7065', nickname: 'ShadowHunter', username: 'shadowhunter_cn', email: 'shadow@163.com',
@@ -1479,6 +1513,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1027', matchName: 'MLBB 月度杯', game: 'Mobile Legends', joinTime: '2026-03-01', result: 'top4', pointsEarned: 100 },
     ],
     adminLog: [],
+    badges: ['champion', 'community_star', 'top_player'],
   },
   {
     id: 'U-4012', nickname: 'ThunderBolt', username: 'thunderbolt_sg', email: 'thunder@gmail.com',
@@ -1509,6 +1544,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1029', matchName: '泰国区域赛', game: '英雄联盟', joinTime: '2026-04-28', result: 'runner_up', pointsEarned: 200 },
     ],
     adminLog: [],
+    badges: ['runner_up'],
   },
   {
     id: 'U-2090', nickname: 'FireStorm', username: 'firestorm_id', email: 'firestorm@hotmail.com',
@@ -1527,6 +1563,7 @@ export const userListData: UserItem[] = [
       { matchId: '#M1031', matchName: '印尼全国赛', game: '英雄联盟', joinTime: '2026-04-22', result: 'champion', pointsEarned: 500 },
     ],
     adminLog: [],
+    badges: ['champion', 'organizer_pro', 'veteran', 'mvp'],
   },
   {
     id: 'U-1080', nickname: 'SuperAdmin', username: 'superadmin', email: 'admin@gainslink.com',
@@ -3333,3 +3370,317 @@ export const teamListData: TeamItem[] = [
   },
 ];
 
+
+// ─── Community Management Mock Data ──────────────────────────────────────────
+
+export interface CommunityPost {
+  id: number;
+  title: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  category: string;
+  likes: number;
+  comments: number;
+  shares: number;
+  views: number;
+  isPinned: boolean;
+  isOfficial: boolean;
+  status: 'normal' | 'hidden' | 'deleted';
+  autoReview: 'passed' | 'failed' | 'pending';
+  autoReviewReason?: string;
+  createdAt: string;
+  reportCount: number;
+}
+
+export interface CommunityUserProfile {
+  id: string;
+  name: string;
+  avatar: string;
+  joinedAt: string;
+  totalPosts: number;
+  totalLikes: number;
+  followers: number;
+  riskLevel: 'normal' | 'warning' | 'banned';
+  reportCount: number;
+  bio: string;
+  isMuted?: boolean;
+  spaceImages?: string[]; // images the user has posted in their space
+}
+
+export interface UserHostedMatch {
+  id: string;
+  name: string;
+  game: string;
+  status: 'draft' | 'open' | 'closing' | 'live' | 'ended' | 'cancelled';
+  approvalStatus?: 'pending_review' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  signed: number;
+  cap: number;
+  matchStart: string;
+  matchEnd: string;
+  prize: string;
+  location: string;
+  createdAt: string;
+}
+
+export interface CommunityComment {
+  id: number;
+  postId: number;
+  postTitle: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  content: string;
+  likes: number;
+  status: 'normal' | 'hidden' | 'deleted';
+  createdAt: string;
+  reportCount: number;
+}
+
+export interface CommunityReport {
+  id: number;
+  type: 'post' | 'comment';
+  targetId: number;
+  targetContent: string;
+  targetAuthorName: string;
+  reporterName: string;
+  reason: string;
+  status: 'pending' | 'resolved' | 'dismissed';
+  submittedAt: string;
+  postTitle?: string; // for comment-type reports: the post the comment belongs to
+}
+
+const AVATARS = [
+  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80',
+  'https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=80',
+  'https://images.unsplash.com/photo-1607746882042-944635dfe10e?w=80',
+  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80',
+  'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=80',
+];
+
+export const communityUserProfiles: CommunityUserProfile[] = [
+  { id: 'u001', name: 'ProGamer88', avatar: AVATARS[0], joinedAt: '2024-03-12', totalPosts: 47, totalLikes: 12480, followers: 2341, riskLevel: 'normal', reportCount: 0, bio: '钻一打野主，专注高分段攻略分享', spaceImages: ['https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400', 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400', 'https://images.unsplash.com/photo-1560419015-7c427e8ae5ba?w=400', 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=400', 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=400', 'https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=400'] },
+  { id: 'u002', name: 'ValorantAce', avatar: AVATARS[1], joinedAt: '2024-06-08', totalPosts: 28, totalLikes: 5620, followers: 987, riskLevel: 'normal', reportCount: 1, bio: 'Immortal 3 Reyna main，Valorant 攻略创作者', spaceImages: ['https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?w=400', 'https://images.unsplash.com/photo-1614294149010-950b698f72c0?w=400', 'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=400'] },
+  { id: 'u003', name: 'MLBBQueen', avatar: AVATARS[3], joinedAt: '2024-01-20', totalPosts: 62, totalLikes: 18900, followers: 4120, riskLevel: 'normal', reportCount: 0, bio: 'MLBB 传奇段位，主打射手/法师，M6 线下观赛达人', spaceImages: ['https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400', 'https://images.unsplash.com/photo-1560419015-7c427e8ae5ba?w=400', 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=400', 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400'] },
+  { id: 'u004', name: 'NewbiePlayer', avatar: AVATARS[4], joinedAt: '2026-06-01', totalPosts: 3, totalLikes: 234, followers: 12, riskLevel: 'normal', reportCount: 0, bio: 'FPS 新手，正在努力学习中 🎮' },
+  { id: 'u005', name: 'AngerPlayer', avatar: AVATARS[5], joinedAt: '2025-08-15', totalPosts: 9, totalLikes: 180, followers: 34, riskLevel: 'warning', reportCount: 6, bio: '' },
+  { id: 'u006', name: 'DotaLegend', avatar: AVATARS[0], joinedAt: '2023-11-30', totalPosts: 81, totalLikes: 22100, followers: 5678, riskLevel: 'normal', reportCount: 0, bio: 'Dota 2 不朽段位，TI 现场观赛 x3，赛事数据分析爱好者', spaceImages: ['https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=400', 'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=400', 'https://images.unsplash.com/photo-1614294149010-950b698f72c0?w=400', 'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?w=400', 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400'] },
+  { id: 'u007', name: 'EsportsCoach', avatar: AVATARS[1], joinedAt: '2024-02-14', totalPosts: 53, totalLikes: 31400, followers: 7890, riskLevel: 'normal', reportCount: 0, bio: '前职业战队教练，现专注电竞科普与教学内容', spaceImages: ['https://images.unsplash.com/photo-1560419015-7c427e8ae5ba?w=400', 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=400'] },
+  { id: 'u008', name: 'GossipKing', avatar: AVATARS[2], joinedAt: '2025-04-22', totalPosts: 15, totalLikes: 2340, followers: 890, riskLevel: 'warning', reportCount: 14, bio: '电竞圈内幕爆料' },
+  { id: 'u009', name: 'ClimbingHigh', avatar: AVATARS[3], joinedAt: '2024-09-05', totalPosts: 22, totalLikes: 7800, followers: 1230, riskLevel: 'normal', reportCount: 0, bio: '从黄金一路爬到 GM，分享上分心得' },
+  { id: 'u010', name: 'FPSDebater', avatar: AVATARS[4], joinedAt: '2025-01-18', totalPosts: 18, totalLikes: 3410, followers: 560, riskLevel: 'normal', reportCount: 0, bio: 'FPS 全品类玩家，喜欢讨论游戏设计与竞技平衡' },
+  { id: 'u011', name: 'AccountSeller', avatar: AVATARS[5], joinedAt: '2026-07-04', totalPosts: 2, totalLikes: 8, followers: 1, riskLevel: 'banned', reportCount: 9, bio: '' },
+  { id: 'official', name: 'Gainslink Official', avatar: AVATARS[2], joinedAt: '2023-01-01', totalPosts: 134, totalLikes: 89000, followers: 52000, riskLevel: 'normal', reportCount: 0, bio: 'Gainslink 平台官方账号，发布赛事公告与平台资讯' },
+];
+
+// 用户举办的赛事（按 userId 索引）
+export const userHostedMatches: Record<string, UserHostedMatch[]> = {
+  'U-7715': [
+    { id: 'H-001', name: '华北区王者荣耀城市联赛', game: '王者荣耀', status: 'live', approvalStatus: 'approved', signed: 16, cap: 16, matchStart: '2026-07-10', matchEnd: '2026-07-20', prize: '¥5,000', location: '北京', createdAt: '2026-06-20' },
+    { id: 'H-002', name: '英雄联盟校园公开赛', game: '英雄联盟', status: 'open', approvalStatus: 'approved', signed: 8, cap: 32, matchStart: '2026-08-01', matchEnd: '2026-08-15', prize: '¥3,000', location: '北京/线上', createdAt: '2026-07-01' },
+    { id: 'H-003', name: 'MLBB 周末挑战杯 Vol.3', game: 'Mobile Legends', status: 'ended', approvalStatus: 'approved', signed: 12, cap: 16, matchStart: '2026-06-15', matchEnd: '2026-06-16', prize: '¥1,500', location: '线上', createdAt: '2026-06-01' },
+    { id: 'H-004', name: 'CS2 黑铁突围赛', game: 'CS2', status: 'draft', approvalStatus: 'pending_review', signed: 0, cap: 8, matchStart: '2026-08-10', matchEnd: '2026-08-10', prize: '¥800', location: '线上', createdAt: '2026-07-15' },
+  ],
+  'U-1109': [
+    { id: 'H-010', name: 'PH Legends Cup Season 2', game: 'Mobile Legends', status: 'live', approvalStatus: 'approved', signed: 24, cap: 32, matchStart: '2026-07-05', matchEnd: '2026-07-25', prize: '$2,000', location: 'Manila / Online', createdAt: '2026-06-15' },
+    { id: 'H-011', name: 'SEA Valorant Invitational', game: 'Valorant', status: 'open', approvalStatus: 'approved', signed: 12, cap: 16, matchStart: '2026-08-05', matchEnd: '2026-08-10', prize: '$1,500', location: 'Online', createdAt: '2026-07-10' },
+    { id: 'H-012', name: 'Philippines LoL Championship', game: '英雄联盟', status: 'ended', approvalStatus: 'approved', signed: 16, cap: 16, matchStart: '2026-06-01', matchEnd: '2026-06-10', prize: '$3,000', location: 'Quezon City', createdAt: '2026-05-10' },
+    { id: 'H-013', name: 'PH CS2 Open Qualifier', game: 'CS2', status: 'open', approvalStatus: 'rejected', rejectionReason: '报名人数上限设置不符合平台规则，请修改后重新提交', signed: 0, cap: 4, matchStart: '2026-07-28', matchEnd: '2026-07-28', prize: '$500', location: 'Online', createdAt: '2026-07-12' },
+  ],
+};
+
+export const communityPostData: CommunityPost[] = [
+  { id: 1, title: '【攻略】S14 赛季峡谷之巅最强英雄 Tier List', content: '本期 Tier List 综合了钻石以上段位的对局数据，重点分析了 ADC 和打野的强度变化。\n\n【S 级英雄】\n· 打野：Vi、Master Yi、Warwick（版本强势，清野速度快）\n· ADC：Jinx、Miss Fortune、Zeri（射程和爆发俱佳）\n· 辅助：Thresh、Nautilus（钩子英雄永远强势）\n\n【A 级英雄】\n· 上单：Darius、Fiora、Garen\n· 中单：Syndra、Orianna、Zed\n\n本期版本的关键点是打野节奏加快，建议选取清野效率高的英雄快速 Farm，争取在 10 分钟前完成两次 Gank 奠定优势。具体使用建议欢迎在评论区交流！', authorId: 'u001', authorName: 'ProGamer88', authorAvatar: AVATARS[0], category: 'League of Legends', likes: 1240, comments: 87, shares: 203, views: 8420, isPinned: true, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-10 14:32', reportCount: 0 },
+  { id: 2, title: 'Valorant 新特工 Clove 技能详解与配队推荐', content: '今天来聊聊新特工 Clove 的技能组。\n\n【技能组解析】\n· Q（Pick-Me-Up）：快速获得临时减速增益，进攻时机捕捉利器\n· C（Meddle）：投掷减速障碍物，可以封锁角落或断路\n· E（Ruse）：可以在**死后**使用，用烟雾支援队友——这是 Clove 最独特的机制\n· X（Not Dead Yet）：复活技能，复活后若能击杀敌人即可保留存活\n\n【配队建议】\n Clove 最适合和强攻击型 Duelist 搭配，如 Jett 或 Reyna。Clove 死后可以继续提供信息和烟雾，让 Jett 继续强攻。防守端 E 技能的灵活性也很高，值得深入研究。\n\n总体来说是现版本 S 级 Controller，强烈推荐。', authorId: 'u002', authorName: 'ValorantAce', authorAvatar: AVATARS[1], category: 'Valorant', likes: 856, comments: 64, shares: 121, views: 5230, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-10 11:18', reportCount: 1 },
+  { id: 3, title: '【官方公告】Gainslink 夏季邀请赛报名开启', content: '各位玩家好！\n\nGainslink 夏季邀请赛现已正式开放报名，本次赛事总奖金池达 50,000 美元，分设以下项目：\n\n· League of Legends 5v5 — 奖金 $20,000\n· Valorant 5v5 — 奖金 $15,000\n· Mobile Legends 5v5 — 奖金 $10,000\n· CS2 5v5 — 奖金 $5,000\n\n【报名要求】\n- 队伍需由 5 名主力 + 1 名替补组成\n- 队长账号段位不低于各游戏 Top 5%\n- 报名截止日期：2026年7月31日\n\n【赛程安排】\n- 预选赛：8月1日—8月15日（线上）\n- 决赛圈：8月22日—8月24日（线下，吉隆坡）\n\n详情请访问官网或联系官方客服。期待与各路高手相见！', authorId: 'official', authorName: 'Gainslink Official', authorAvatar: AVATARS[2], category: 'Announcement', likes: 2341, comments: 156, shares: 478, views: 15670, isPinned: true, isOfficial: true, status: 'normal', autoReview: 'passed', createdAt: '2026-07-09 09:00', reportCount: 0 },
+  { id: 4, title: 'MLBB 最新版本强势射手英雄盘点', content: '新版本更新后，射手路的强度格局发生了明显变化。\n\n【第一梯队（强烈推荐）】\n· Beatrix — 调整后 Westem Expelled 伤害提升 12%，对抗拆塔均优秀\n· Moskov — 穿透机制在团战后期价值极高，配合坦克队友稳定输出\n· Brody — 叠层后的爆发伤害依然一流，1v1 能力全场最强\n\n【第二梯队（可用）】\n· Miya、Layla（适合新手保命打法）\n· Clint（技能流高手必选）\n\n整体来说本版本推荐优先 Beatrix 或 Brody，不熟悉可以上 Miya 稳健发育。欢迎讨论！', authorId: 'u003', authorName: 'MLBBQueen', authorAvatar: AVATARS[3], category: 'Mobile Legends', likes: 432, comments: 38, shares: 67, views: 2890, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-09 18:45', reportCount: 0 },
+  { id: 5, title: '求助：CS2 准星设置推荐？', content: '最近入坑 CS2，一直找不到适合自己的准星设置，大家有什么推荐吗？\n\n目前用的是默认准星，感觉偏大，瞄准时很难精确。\n\n我的习惯是中距离突入，偏好 Rifle（AK47、M4A4），希望准星能够精准但不影响视野。\n\n感谢大家！', authorId: 'u004', authorName: 'NewbiePlayer', authorAvatar: AVATARS[4], category: 'CS2', likes: 89, comments: 42, shares: 12, views: 1240, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-09 15:20', reportCount: 0 },
+  { id: 6, title: '这个游戏真的坑！队友太菜了气死我', content: '今天连续输了10把，全是队友的问题，这游戏就是垃圾，所有人都是脑残，这社区的玩家全是废物，搞什么开发商去死吧！！！', authorId: 'u005', authorName: 'AngerPlayer', authorAvatar: AVATARS[5], category: 'League of Legends', likes: 23, comments: 31, shares: 2, views: 780, isPinned: false, isOfficial: false, status: 'hidden', autoReview: 'failed', autoReviewReason: '检测到侮辱性/仇恨言论（关键词命中：脑残、废物、去死）', createdAt: '2026-07-08 22:11', reportCount: 4 },
+  { id: 7, title: 'Dota 2 TI 预选赛各区赛果汇总', content: '本次 TI 预选赛共分为 6 个大区，目前欧洲区和中国区已完成全部比赛。\n\n【中国区结果】\n1. Team Aster（直通正赛）\n2. Invictus Gaming（直通正赛）\n3. Royal Never Give Up（附加赛）\n\n【欧洲区结果】\n1. Team Liquid（直通）\n2. OG（直通）\n3. Tundra Esports（附加赛）\n\n【北美区】（进行中）\n预计本周末结束，目前 Evil Geniuses 和 nouns 领跑。\n\n其余大区（东南亚/南美/CIS）将于下周陆续公布结果，持续关注！', authorId: 'u006', authorName: 'DotaLegend', authorAvatar: AVATARS[0], category: 'Dota 2', likes: 678, comments: 53, shares: 89, views: 4120, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-08 10:30', reportCount: 0 },
+  { id: 8, title: '【教学】如何提高 LoL 地图意识？5个实用技巧', content: '地图意识是区分高段位和低段位玩家最重要的因素之一。今天分享 5 个可以立即实践的技巧：\n\n**技巧 1：每次回城看一遍小地图**\n回城动画期间是绝佳的地图扫视时机，养成习惯后可以极大减少被偷龙/Baron。\n\n**技巧 2：追踪敌方打野位置**\n每次看到对方打野出现在某个位置，立即在脑海中建立"他目前能到哪里"的模型，2分钟内不要轻易深入对应侧。\n\n**技巧 3：通过对线小兵数判断 Recall 时机**\n当你的小兵波在对方塔下时才 Recall，这样即使你不在线，小兵也会帮你消耗对方精力。\n\n**技巧 4：插眼习惯化**\n每次路过控眼点都顺手插眼，优先保障自己打野路和河道视野。\n\n**技巧 5：关注计时器**\n Baron/龙刷新时间 +15 秒前开始集结，不要等到刷新才想到要打。\n\n希望对大家有帮助，有问题欢迎评论区讨论！', authorId: 'u007', authorName: 'EsportsCoach', authorAvatar: AVATARS[1], category: 'League of Legends', likes: 1087, comments: 72, shares: 165, views: 6780, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-07 16:00', reportCount: 0 },
+  { id: 9, title: 'Valorant 电竞圈爆料：某队主教练疑似行贿裁判', content: '据消息人士透露，某知名战队主教练在近期比赛中涉嫌向裁判行贿，相关证据已被曝光，包括转账截图和聊天记录……（后续内容含大量未经核实的个人信息和指名道姓的指控）', authorId: 'u008', authorName: 'GossipKing', authorAvatar: AVATARS[2], category: 'Valorant', likes: 312, comments: 98, shares: 145, views: 2310, isPinned: false, isOfficial: false, status: 'deleted', autoReview: 'failed', autoReviewReason: '疑似包含未经证实的负面爆料及个人隐私信息，建议人工复核', createdAt: '2026-07-07 03:45', reportCount: 12 },
+  { id: 10, title: '我的第一个 GM 上分历程分享', content: '花了三个赛季终于从钻石爬到 GM，这段时间学到了很多，分享一下心路历程。\n\n**第一赛季（钻三 → 钻一）**\n主要问题是打法太激进，抢头抢资源，忽视团队配合。后来开始刻意练习等待时机，胜率从 45% 提到 52%。\n\n**第二赛季（钻一 → 大师）**\n这段时间专注练习视野控制和分推意识，学会了"当场面不利时如何最大化资源换取"。\n\n**第三赛季（大师 → GM）**\n最关键的进步是心态，不再计较单把输赢，只关注自己的操作质量。连跪 5 把后不倾斜，这是 GM 段位最重要的品质。\n\n分享给同在爬分路上的朋友们，加油！', authorId: 'u009', authorName: 'ClimbingHigh', authorAvatar: AVATARS[3], category: 'League of Legends', likes: 543, comments: 45, shares: 78, views: 3450, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-06 20:15', reportCount: 0 },
+  { id: 11, title: 'MLBB 世界赛 M6 现场观赛体验分享', content: '上周飞去马来西亚看了 M6 决赛，现场气氛太震撼了！\n\n【场馆】吉隆坡 Axiata Arena，座位约 8000 人，现场爆满。\n\n【决赛对阵】ONIC PH vs Echo，最终 ONIC 以 4:2 夺冠。第六局 ONIC 的逆风翻盘简直把我看哭了。\n\n【周边】官方出了非常多联名周边，队伍应援棒、球衣、限定皮肤兑换码，建议早到排队否则很多东西会售罄。\n\n【交通/住宿建议】\n- 住在 Bukit Bintang 附近，地铁直达场馆\n- 提前两天到吉隆坡，可以顺便逛逛当地景点\n\n如果 M7 有机会线下举办，强烈推荐大家亲身体验！', authorId: 'u003', authorName: 'MLBBQueen', authorAvatar: AVATARS[3], category: 'Mobile Legends', likes: 891, comments: 67, shares: 134, views: 5670, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-06 14:30', reportCount: 0 },
+  { id: 12, title: '【投票】你认为哪款 FPS 游戏最需要技术？', content: '一直在想 CS2、Valorant、Apex 这三款游戏哪个最考验纯粹的枪法和技术，发帖征集一下大家的意见。\n\n我个人认为 CS2 的技术天花板最高，原因：\n1. 准确性惩罚机制更严格（移动精度差）\n2. 地图结构对战术理解要求高\n3. 职业级准星误差极小，训练量庞大\n\nValorant 有技能平衡因素，Apex 则引入了移动技巧维度。\n\n你的看法？投票+评论留言！', authorId: 'u010', authorName: 'FPSDebater', authorAvatar: AVATARS[4], category: 'CS2', likes: 234, comments: 89, shares: 43, views: 1890, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-05 11:00', reportCount: 0 },
+  { id: 13, title: '出售 LoL 账号，白金段位，有偿转让', content: '白金 III 账号，冠军皮肤齐全，有需要的私聊，价格面议，支持担保交易……', authorId: 'u011', authorName: 'AccountSeller', authorAvatar: AVATARS[5], category: 'League of Legends', likes: 5, comments: 3, shares: 0, views: 340, isPinned: false, isOfficial: false, status: 'deleted', autoReview: 'failed', autoReviewReason: '检测到账号交易/违规商业行为关键词', createdAt: '2026-07-05 08:22', reportCount: 7 },
+  { id: 14, title: 'Dota 2 新英雄 Ringmaster 初体验', content: '新英雄 Ringmaster 技能机制很有意思，主要走控制流，配合上分路强度很高。\n\n【技能组简评】\n· Q（Impalement）：直线冲刺+控制，对线逃跑追杀均可\n· W（Voodoo Festivity）：光环减速，团战极强\n· E（Wheel of Wonder）：诱导敌人走向指定位置，配合队友技能完美\n· R（The Greatest Show）：召唤大范围控制区域，团战终结技\n\n推荐出装走支持路线，优先 Aether Lens + Force Staff，机动性拉满。配合 Magnus 或 Tidehunter 这类强力团控效果爆炸。\n\n目前胜率在 54%，是强力新英雄。', authorId: 'u006', authorName: 'DotaLegend', authorAvatar: AVATARS[0], category: 'Dota 2', likes: 445, comments: 34, shares: 56, views: 2890, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-04 19:00', reportCount: 0 },
+  { id: 15, title: '【讨论】电竞职业化对游戏环境的影响', content: '随着电竞越来越职业化，普通玩家的游戏体验是变好了还是变差了？来聊聊。\n\n**正面影响**\n- 游戏更新更频繁，开发商有更多预算维护平衡\n- 职业内容带动学习资源产出，萌新有更多可参考的攻略\n- 赛事赋予游戏"成就感"，让玩家有持续游玩动力\n\n**负面影响**\n- 部分游戏为了职业平衡而牺牲休闲趣味性\n- "职业选手怎么玩，我就怎么玩"的心态催生了大量硬跟版本的跟风玩家\n- 高强度内容轰炸让普通玩家感受到技术差距，容易劝退\n\n你怎么看？欢迎在评论区分享！', authorId: 'u007', authorName: 'EsportsCoach', authorAvatar: AVATARS[1], category: 'General', likes: 723, comments: 112, shares: 98, views: 4560, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-04 10:45', reportCount: 0 },
+  { id: 16, title: '新人报道！请多关照~', content: '大家好，我是刚注册的新用户！平时主玩 Valorant 和 MLBB，希望能在这里认识更多朋友，一起上分冲榜！', authorId: 'u004', authorName: 'NewbiePlayer', authorAvatar: AVATARS[4], category: 'General', likes: 12, comments: 5, shares: 1, views: 230, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'pending', createdAt: '2026-07-11 09:14', reportCount: 0 },
+  { id: 17, title: '今日 LoL 排位碎碎念', content: '早上开局拿了个五连胜，下午又被拉回来了。感觉版本在往控制方向走，打野生存压力大。大家有没有好用的打野英雄推荐？', authorId: 'u001', authorName: 'ProGamer88', authorAvatar: AVATARS[0], category: 'League of Legends', likes: 34, comments: 11, shares: 3, views: 410, isPinned: false, isOfficial: false, status: 'normal', autoReview: 'passed', createdAt: '2026-07-11 11:02', reportCount: 0 },
+];
+
+export const communityDailyStats = {
+  todayPosts: 6,
+  todayComments: 231,
+  todayViews: 12840,
+  todayLikes: 1423,
+  yesterdayPosts: 5,
+  yesterdayComments: 319,
+  yesterdayViews: 10210,
+  autoReviewPassed: 4,
+  autoReviewFailed: 1,
+  autoReviewPending: 1,
+  totalAutoReviewFailed: 3,
+};
+
+export const communityHourlyData = [
+  { hour: '00', posts: 0, views: 120 },
+  { hour: '02', posts: 0, views: 80 },
+  { hour: '04', posts: 0, views: 45 },
+  { hour: '06', posts: 1, views: 210 },
+  { hour: '08', posts: 2, views: 1240 },
+  { hour: '09', posts: 1, views: 2180 },
+  { hour: '10', posts: 0, views: 1870 },
+  { hour: '11', posts: 2, views: 3420 },
+  { hour: '12', posts: 0, views: 2100 },
+  { hour: '13', posts: 0, views: 1575 },
+];
+
+export const communityCommentData: CommunityComment[] = [
+  { id: 101, postId: 1, postTitle: '【攻略】S14 赛季峡谷之巅最强英雄 Tier List', authorId: 'u012', authorName: 'SummonerX', authorAvatar: AVATARS[2], content: '写得很详细！ADC 的分析尤其到位，Jinx 确实是现在版本最强的 ADC 之一。', likes: 34, status: 'normal', createdAt: '2026-07-10 15:02', reportCount: 0 },
+  { id: 102, postId: 1, postTitle: '【攻略】S14 赛季峡谷之巅最强英雄 Tier List', authorId: 'u013', authorName: 'LaneKing', authorAvatar: AVATARS[3], content: '不同意你对打野的分析，现在 Graves 明显比 Lee Sin 强多了好吗？', likes: 18, status: 'normal', createdAt: '2026-07-10 15:45', reportCount: 0 },
+  { id: 103, postId: 2, postTitle: 'Valorant 新特工 Clove 技能详解', authorId: 'u014', authorName: 'RadiantPlayer', authorAvatar: AVATARS[4], content: '楼主分析得很透彻，但我觉得 Clove 的 E 技能在防守端也有很大发挥空间。', likes: 22, status: 'normal', createdAt: '2026-07-10 12:00', reportCount: 0 },
+  { id: 104, postId: 6, postTitle: '这个游戏真的坑！队友太菜了气死我', authorId: 'u015', authorName: 'ToxicFan', authorAvatar: AVATARS[5], content: '就是，这游戏垃圾透了，开发商都是废物，全部滚去死！！！', likes: 3, status: 'hidden', createdAt: '2026-07-08 22:35', reportCount: 5 },
+  { id: 105, postId: 7, postTitle: 'Dota 2 TI 预选赛各区赛果汇总', authorId: 'u016', authorName: 'DotaFan2024', authorAvatar: AVATARS[0], content: '感谢汇总！中国区的结果还是挺让人惊喜的，期待 TI 正赛的表现。', likes: 41, status: 'normal', createdAt: '2026-07-08 11:00', reportCount: 0 },
+  { id: 106, postId: 8, postTitle: '【教学】如何提高 LoL 地图意识？', authorId: 'u017', authorName: 'ImprovePlayer', authorAvatar: AVATARS[1], content: '第三个技巧关于小兵波控的部分写得太好了，一直不知道怎么把握时机。', likes: 67, status: 'normal', createdAt: '2026-07-07 17:20', reportCount: 0 },
+  { id: 107, postId: 10, postTitle: '我的第一个 GM 上分历程分享', authorId: 'u018', authorName: 'DiamondPlayer', authorAvatar: AVATARS[2], content: '太励志了！我现在卡铂金，感觉完全看不到希望……', likes: 28, status: 'normal', createdAt: '2026-07-06 21:00', reportCount: 0 },
+  { id: 108, postId: 10, postTitle: '我的第一个 GM 上分历程分享', authorId: 'u019', authorName: 'GoldNoob', authorAvatar: AVATARS[3], content: '你们 GM 真的是靠技术上的还是买号直接上来的？某人不说谁知道呢。', likes: 2, status: 'hidden', createdAt: '2026-07-06 22:15', reportCount: 3 },
+  { id: 109, postId: 12, postTitle: '【投票】你认为哪款 FPS 游戏最需要技术？', authorId: 'u020', authorName: 'ProAimer', authorAvatar: AVATARS[4], content: '毫无疑问是 CS2，职业选手平均准星误差都在 0.3 以内，没有其他游戏能达到这个精度。', likes: 56, status: 'normal', createdAt: '2026-07-05 12:30', reportCount: 0 },
+  { id: 110, postId: 15, postTitle: '【讨论】电竞职业化对游戏环境的影响', authorId: 'u021', authorName: 'VeteranGamer', authorAvatar: AVATARS[5], content: '我觉得职业化总体上是好事，提升了游戏曝光度，也让更多优质内容被创作出来。', likes: 89, status: 'normal', createdAt: '2026-07-04 11:30', reportCount: 0 },
+  { id: 111, postId: 4, postTitle: 'MLBB 最新版本强势射手英雄盘点', authorId: 'u022', authorName: 'MobileLegendPro', authorAvatar: AVATARS[0], content: '同意 Beatrix 的强势，但你没提 Moskov，他在这版本也属于 A 级以上。', likes: 15, status: 'normal', createdAt: '2026-07-09 19:30', reportCount: 0 },
+  { id: 112, postId: 5, postTitle: '求助：CS2 准星设置推荐？', authorId: 'u023', authorName: 'CS2Veteran', authorAvatar: AVATARS[1], content: '推荐绿色点状准星，大小 2，厚度 1，不透明度 200，这是大多数职业选手用的风格。', likes: 45, status: 'normal', createdAt: '2026-07-09 16:00', reportCount: 0 },
+  { id: 113, postId: 11, postTitle: 'MLBB 世界赛 M6 现场观赛体验分享', authorId: 'u024', authorName: 'GlobalFan', authorAvatar: AVATARS[2], content: '太羡慕了！我也想去现场看一次，不知道 M7 在哪里举办？', likes: 31, status: 'normal', createdAt: '2026-07-06 15:00', reportCount: 0 },
+  { id: 114, postId: 14, postTitle: 'Dota 2 新英雄 Ringmaster 初体验', authorId: 'u025', authorName: 'NewHeroFan', authorAvatar: AVATARS[3], content: '这个英雄让我想起了 Grimstroke，都是以控制为主，期待在职业圈的表现。', likes: 22, status: 'normal', createdAt: '2026-07-04 20:00', reportCount: 0 },
+  { id: 115, postId: 3, postTitle: '【官方公告】Gainslink 夏季邀请赛报名开启', authorId: 'u026', authorName: 'TourneyHunter', authorAvatar: AVATARS[4], content: '请问这次邀请赛对参赛选手有段位要求吗？', likes: 12, status: 'normal', createdAt: '2026-07-09 10:00', reportCount: 0 },
+  { id: 116, postId: 9, postTitle: 'Valorant 电竞圈爆料：某队主教练疑似行贿', authorId: 'u027', authorName: 'TruthSeeker', authorAvatar: AVATARS[5], content: '这种没有来源的爆料就是在散布谣言，楼主你有证据吗？', likes: 78, status: 'normal', createdAt: '2026-07-07 04:10', reportCount: 0 },
+  { id: 117, postId: 2, postTitle: 'Valorant 新特工 Clove 技能详解', authorId: 'u028', authorName: 'ShadyPromo', authorAvatar: AVATARS[0], content: '想要免费 VP 吗？加我 Discord：cheat_store#0000，限时福利！！！', likes: 0, status: 'deleted', createdAt: '2026-07-10 13:00', reportCount: 8 },
+];
+
+export const communityReportData: CommunityReport[] = [
+  { id: 201, type: 'post', targetId: 6, targetContent: '这个游戏真的坑！队友太菜了气死我……全是垃圾……', targetAuthorName: 'AngerPlayer', reporterName: 'CommunityMod', reason: '侮辱性言论 / 有毒行为', status: 'resolved', submittedAt: '2026-07-08 23:00' },
+  { id: 202, type: 'comment', targetId: 104, targetContent: '就是，这游戏垃圾透了，开发商都是废物，全部滚去死！！！', targetAuthorName: 'ToxicFan', reporterName: 'ProGamer88', reason: '人身攻击 / 仇恨言论', status: 'resolved', submittedAt: '2026-07-08 22:50', postTitle: '这个游戏真的坑！队友太菜了气死我' },
+  { id: 203, type: 'post', targetId: 9, targetContent: 'Valorant 电竞圈爆料：某队主教练疑似行贿裁判……', targetAuthorName: 'GossipKing', reporterName: 'EsportsCoach', reason: '散布谣言 / 未经核实信息', status: 'resolved', submittedAt: '2026-07-07 05:00' },
+  { id: 204, type: 'post', targetId: 13, targetContent: '出售 LoL 账号，白金段位，有偿转让……', targetAuthorName: 'AccountSeller', reporterName: 'LaneKing', reason: '账号交易 / 违规营销', status: 'resolved', submittedAt: '2026-07-05 09:00' },
+  { id: 205, type: 'comment', targetId: 117, targetContent: '想要免费 VP 吗？加我 Discord：cheat_store#0000……', targetAuthorName: 'ShadyPromo', reporterName: 'ValorantAce', reason: '垃圾广告 / 诈骗链接', status: 'resolved', submittedAt: '2026-07-10 13:15', postTitle: 'Valorant 新特工 Clove 技能详解与配队推荐' },
+  { id: 206, type: 'post', targetId: 2, targetContent: 'Valorant 新特工 Clove 技能详解与配队推荐……', targetAuthorName: 'ValorantAce', reporterName: 'RadiantPlayer', reason: '内容不实 / 数据有误', status: 'dismissed', submittedAt: '2026-07-10 14:00' },
+  { id: 207, type: 'comment', targetId: 108, targetContent: '你们 GM 真的是靠技术上的还是买号直接上来的？某人不说谁知道呢。', targetAuthorName: 'GoldNoob', reporterName: 'ClimbingHigh', reason: '恶意质疑 / 人身攻击', status: 'pending', submittedAt: '2026-07-06 22:30', postTitle: '我的第一个 GM 上分历程分享' },
+  { id: 208, type: 'post', targetId: 6, targetContent: '这个游戏真的坑！队友太菜了气死我……', targetAuthorName: 'AngerPlayer', reporterName: 'DiamondPlayer', reason: '发泄情绪 / 负面内容', status: 'resolved', submittedAt: '2026-07-08 22:20' },
+  { id: 209, type: 'comment', targetId: 104, targetContent: '就是，这游戏垃圾透了……全部滚去死！！！', targetAuthorName: 'ToxicFan', reporterName: 'SummonerX', reason: '仇恨言论 / 威胁性内容', status: 'resolved', submittedAt: '2026-07-08 23:10', postTitle: '这个游戏真的坑！队友太菜了气死我' },
+  { id: 210, type: 'post', targetId: 9, targetContent: 'Valorant 电竞圈爆料：某队主教练疑似行贿裁判……', targetAuthorName: 'GossipKing', reporterName: 'TruthSeeker', reason: '未经核实的爆料', status: 'resolved', submittedAt: '2026-07-07 06:00' },
+  { id: 211, type: 'comment', targetId: 108, targetContent: '你们 GM 真的是靠技术上的……某人不说谁知道呢。', targetAuthorName: 'GoldNoob', reporterName: 'ImprovePlayer', reason: '不友善言论', status: 'pending', submittedAt: '2026-07-06 23:00', postTitle: '我的第一个 GM 上分历程分享' },
+  { id: 212, type: 'post', targetId: 13, targetContent: '出售 LoL 账号，白金段位，有偿转让……', targetAuthorName: 'AccountSeller', reporterName: 'ProGamer88', reason: '商业行为 / 账号买卖', status: 'resolved', submittedAt: '2026-07-05 08:40' },
+  { id: 213, type: 'comment', targetId: 117, targetContent: '想要免费 VP 吗？加我 Discord……', targetAuthorName: 'ShadyPromo', reporterName: 'CS2Veteran', reason: '诈骗 / 钓鱼链接', status: 'resolved', submittedAt: '2026-07-10 13:30', postTitle: 'Valorant 新特工 Clove 技能详解与配队推荐' },
+  { id: 214, type: 'post', targetId: 6, targetContent: '这个游戏真的坑！……', targetAuthorName: 'AngerPlayer', reporterName: 'GoldNoob', reason: '消极情绪蔓延', status: 'dismissed', submittedAt: '2026-07-08 22:45' },
+  { id: 215, type: 'comment', targetId: 108, targetContent: '你们 GM 真的是靠技术上的……', targetAuthorName: 'GoldNoob', reporterName: 'DotaFan2024', reason: '质疑他人诚信', status: 'pending', submittedAt: '2026-07-07 00:10', postTitle: '我的第一个 GM 上分历程分享' },
+];
+
+export const communityTrendData = [
+  { date: '07-05', posts: 42, comments: 178 },
+  { date: '07-06', posts: 57, comments: 234 },
+  { date: '07-07', posts: 38, comments: 156 },
+  { date: '07-08', posts: 63, comments: 287 },
+  { date: '07-09', posts: 71, comments: 319 },
+  { date: '07-10', posts: 86, comments: 412 },
+  { date: '07-11', posts: 54, comments: 231 },
+];
+
+export const communityCategoryData = [
+  { name: 'League of Legends', value: 38 },
+  { name: 'Valorant', value: 22 },
+  { name: 'Mobile Legends', value: 18 },
+  { name: 'Dota 2', value: 12 },
+  { name: 'CS2', value: 7 },
+  { name: 'General', value: 3 },
+];
+
+export const communityWeeklyData = [
+  { week: '06/16', posts: 312, comments: 1456, views: 52300, likes: 2847 },
+  { week: '06/23', posts: 287, comments: 1234, views: 48100, likes: 2612 },
+  { week: '06/30', posts: 398, comments: 1789, views: 67200, likes: 3521 },
+  { week: '07/07', posts: 411, comments: 1901, views: 71500, likes: 3890 },
+];
+
+export const communityMonthlyData = [
+  { month: '02月', posts: 892, comments: 4213, views: 187400, likes: 10234 },
+  { month: '03月', posts: 1134, comments: 5678, views: 231600, likes: 13456 },
+  { month: '04月', posts: 1287, comments: 6234, views: 268900, likes: 15678 },
+  { month: '05月', posts: 1456, comments: 7891, views: 312300, likes: 18234 },
+  { month: '06月', posts: 1623, comments: 8456, views: 345600, likes: 20567 },
+  { month: '07月', posts: 454, comments: 1901, views: 71500, likes: 3890 },
+];
+
+export const communityPeriodStats = {
+  day: {
+    posts: 6, comments: 231, views: 12840, likes: 1423,
+    prevPosts: 5, prevComments: 319, prevViews: 10210, prevLikes: 0,
+    autoReviewPassed: 4, autoReviewFailed: 1, autoReviewPending: 1,
+  },
+  week: {
+    posts: 411, comments: 1901, views: 71500, likes: 3890,
+    prevPosts: 398, prevComments: 1789, prevViews: 67200, prevLikes: 3521,
+    autoReviewPassed: 31, autoReviewFailed: 5, autoReviewPending: 3,
+  },
+  month: {
+    posts: 1623, comments: 8456, views: 345600, likes: 20567,
+    prevPosts: 1456, prevComments: 7891, prevViews: 312300, prevLikes: 18234,
+    autoReviewPassed: 134, autoReviewFailed: 21, autoReviewPending: 8,
+  },
+};
+
+export interface CommentReply {
+  id: number;
+  commentId: number;
+  authorName: string;
+  authorAvatar: string;
+  content: string;
+  likes: number;
+  status: 'normal' | 'hidden' | 'deleted';
+  createdAt: string;
+}
+
+const _AV = [
+  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80',
+  'https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=80',
+  'https://images.unsplash.com/photo-1607746882042-944635dfe10e?w=80',
+  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80',
+  'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=80',
+];
+
+export const communityCommentReplies: CommentReply[] = [
+  { id: 1001, commentId: 101, authorName: 'ProGamer88', authorAvatar: _AV[0], content: '谢谢认可！下期会出更详细的 ADC 出装指南。', likes: 12, status: 'normal', createdAt: '2026-07-10 15:30' },
+  { id: 1002, commentId: 102, authorName: 'ProGamer88', authorAvatar: _AV[0], content: '你说得对，Graves 我下版本会补进去，感谢指正！', likes: 8, status: 'normal', createdAt: '2026-07-10 16:00' },
+  { id: 1003, commentId: 102, authorName: 'LaneKing', authorAvatar: _AV[3], content: '期待更新！Graves 清野速度确实比 Lee Sin 快一个段位。', likes: 5, status: 'normal', createdAt: '2026-07-10 16:15' },
+  { id: 1004, commentId: 106, authorName: 'EsportsCoach', authorAvatar: _AV[1], content: '感谢认可！小兵波控是提升的核心，加油！', likes: 23, status: 'normal', createdAt: '2026-07-07 18:00' },
+  { id: 1005, commentId: 107, authorName: 'ClimbingHigh', authorAvatar: _AV[3], content: '当时我铂金卡了很久，专注练一个英雄才突破的，加油！', likes: 19, status: 'normal', createdAt: '2026-07-06 21:30' },
+  { id: 1006, commentId: 109, authorName: 'FPSDebater', authorAvatar: _AV[4], content: '完全同意，CS2 的操作天花板是所有 FPS 里最高的。', likes: 31, status: 'normal', createdAt: '2026-07-05 13:00' },
+  { id: 1007, commentId: 112, authorName: 'NewbiePlayer', authorAvatar: _AV[4], content: '谢谢！我去试试绿色点状，感觉应该比默认好用很多。', likes: 9, status: 'normal', createdAt: '2026-07-09 16:30' },
+  { id: 1008, commentId: 115, authorName: 'Gainslink Official', authorAvatar: _AV[2], content: '队长账号段位需达到各游戏 Top 5%，详情可查看官网报名页面。', likes: 45, status: 'normal', createdAt: '2026-07-09 10:30' },
+];
+
+export interface AutoReviewLog {
+  id: number;
+  postId: number;
+  postTitle: string;
+  authorName: string;
+  result: 'passed' | 'failed' | 'pending';
+  reason?: string;
+  reviewedAt: string;
+  confidence: number;
+}
+
+export const communityAutoReviewLog: AutoReviewLog[] = [
+  { id: 1, postId: 16, postTitle: '新人报道！请多关照~', authorName: 'NewbiePlayer', result: 'pending', reviewedAt: '2026-07-11 09:14', confidence: 0 },
+  { id: 2, postId: 17, postTitle: '今日 LoL 排位碎碎念', authorName: 'ProGamer88', result: 'passed', reviewedAt: '2026-07-11 11:02', confidence: 97 },
+  { id: 3, postId: 13, postTitle: '出售 LoL 账号，白金段位，有偿转让', authorName: 'AccountSeller', result: 'failed', reason: '检测到账号交易/违规商业行为关键词', reviewedAt: '2026-07-05 08:22', confidence: 99 },
+  { id: 4, postId: 6, postTitle: '这个游戏真的坑！队友太菜了气死我', authorName: 'AngerPlayer', result: 'failed', reason: '检测到侮辱性/仇恨言论（关键词命中：脑残、废物、去死）', reviewedAt: '2026-07-08 22:11', confidence: 95 },
+  { id: 5, postId: 9, postTitle: 'Valorant 电竞圈爆料：某队主教练疑似行贿裁判', authorName: 'GossipKing', result: 'failed', reason: '疑似包含未经证实的负面爆料及个人隐私信息', reviewedAt: '2026-07-07 03:45', confidence: 87 },
+  { id: 6, postId: 1, postTitle: '【攻略】S14 赛季峡谷之巅最强英雄 Tier List', authorName: 'ProGamer88', result: 'passed', reviewedAt: '2026-07-10 14:32', confidence: 99 },
+  { id: 7, postId: 2, postTitle: 'Valorant 新特工 Clove 技能详解与配队推荐', authorName: 'ValorantAce', result: 'passed', reviewedAt: '2026-07-10 11:18', confidence: 98 },
+  { id: 8, postId: 3, postTitle: '【官方公告】Gainslink 夏季邀请赛报名开启', authorName: 'Gainslink Official', result: 'passed', reviewedAt: '2026-07-09 09:00', confidence: 100 },
+  { id: 9, postId: 4, postTitle: 'MLBB 最新版本强势射手英雄盘点', authorName: 'MLBBQueen', result: 'passed', reviewedAt: '2026-07-09 18:45', confidence: 98 },
+  { id: 10, postId: 8, postTitle: '【教学】如何提高 LoL 地图意识？5个实用技巧', authorName: 'EsportsCoach', result: 'passed', reviewedAt: '2026-07-07 16:00', confidence: 99 },
+];
